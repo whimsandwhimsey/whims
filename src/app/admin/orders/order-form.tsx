@@ -123,7 +123,7 @@ export function OrderForm({
   const [supplierId, setSupplierId] = useState(order?.supplierId ?? '');
   const [dpType, setDpType] = useState(order?.dpType ?? 'PERCENTAGE');
   const [dpValue, setDpValue] = useState(
-    order?.dpValue !== undefined && order?.dpValue !== null ? String(toNumber(order.dpValue)) : '25'
+    order?.dpValue !== undefined && order?.dpValue !== null ? String(toNumber(order.dpValue as any)) : '25'
   );
   const [poBatchId, setPoBatchId] = useState(order?.poBatchId ?? '');
   const [orderDate, setOrderDate] = useState(

@@ -3,47 +3,48 @@
 @tailwind utilities;
 
 /*
-  Palette — "Slow Reads": derived from the brand logo (sage green wordmark,
-  black cat mascot, warm white background). Friendly and a little playful,
-  matching a cozy neighborhood bookstore rather than a corporate back-office.
+  Palette — "Whims & Whimsey": derived from the brand logo (navy wordmark,
+  gold sparkle, sky-blue clouds, orange & teal accents, warm white
+  background). Playful children's-bookstore energy without tipping into
+  garish — navy carries the weight, the warmer colors are accents only.
 */
 @layer base {
   :root {
-    --background: 90 25% 97%;        /* warm, faintly sage-tinted white */
-    --foreground: 0 0% 12%;          /* near-black, matches the cat mascot */
+    --background: 210 40% 98%;       /* warm white, faint sky tint */
+    --foreground: 210 35% 14%;       /* near-navy, matches wordmark ink */
 
     --card: 0 0% 100%;
-    --card-foreground: 0 0% 12%;
+    --card-foreground: 210 35% 14%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 12%;
+    --popover-foreground: 210 35% 14%;
 
-    --primary: 85 24% 36%;           /* deep sage green (buttons, links) */
+    --primary: 206 55% 24%;          /* deep navy (buttons, links) — logo "w/h" */
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 85 22% 93%;         /* light sage, from the logo wordmark */
-    --secondary-foreground: 85 24% 22%;
+    --secondary: 207 55% 94%;        /* soft sky blue, from the logo clouds */
+    --secondary-foreground: 206 55% 22%;
 
-    --muted: 85 16% 94%;
-    --muted-foreground: 0 0% 38%;
+    --muted: 207 30% 95%;
+    --muted-foreground: 210 15% 42%;
 
-    --accent: 85 22% 90%;
-    --accent-foreground: 85 24% 24%;
+    --accent: 207 65% 88%;           /* sky blue, badges/highlights */
+    --accent-foreground: 206 55% 22%;
 
-    --destructive: 3 72% 46%;
+    --destructive: 12 78% 52%;       /* warm orange-red, from the logo "m" */
     --destructive-foreground: 0 0% 100%;
 
-    --success: 152 40% 32%;
+    --success: 174 37% 40%;          /* teal, from the logo "s" */
     --success-foreground: 0 0% 100%;
 
-    --warning: 38 85% 45%;
-    --warning-foreground: 0 0% 100%;
+    --warning: 43 89% 55%;           /* gold, from the logo sparkle/"h" */
+    --warning-foreground: 210 35% 14%;
 
-    --brass: 81 21% 60%;             /* sage accent, used for highlights */
+    --brass: 43 80% 65%;             /* gold accent, used for highlights */
 
-    --border: 85 16% 88%;
-    --input: 85 16% 88%;
-    --ring: 85 24% 36%;
+    --border: 207 25% 89%;
+    --input: 207 25% 89%;
+    --ring: 206 55% 24%;
 
     --radius: 1rem;
   }

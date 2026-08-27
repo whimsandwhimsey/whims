@@ -9,7 +9,7 @@ import { DeleteButton } from '@/components/delete-button';
 import { MultiSelectFilter } from '@/components/multi-select-filter';
 import { OrderStatusBadge, PaymentStatusBadge } from '@/components/status-badges';
 import { formatCurrency, formatDate } from '@/lib/utils';
-import { orderStatusValues } from '@/lib/validations';
+import { orderStatusValues, orderTypeValues, orderTypeLabels } from '@/lib/validations';
 import { deleteOrder } from './actions';
 
 const PAGE_SIZE = 15;
@@ -33,36 +33,60 @@ const PAYMENT_STATUS_LABELS: Record<string, string> = {
 export default async function OrdersPage({
   searchParams,
 }: {
-  searchParams: { q?: string; page?: string; status?: string; paymentStatus?: string; batch?: string };
+  searchParams: {
+    q?: string;
+    page?: string;
+    status?: string;
+    paymentStatus?: string;
+    batch?: string;
+    orderType?: string;
+    supplier?: string;
+    poMonth?: string;
+  };
 }) {
   const q = searchParams.q?.trim() ?? '';
   const statuses = (searchParams.status ?? '').split(',').filter(Boolean);
   const paymentStatuses = (searchParams.paymentStatus ?? '').split(',').filter(Boolean);
   const batchIds = (searchParams.batch ?? '').split(',').filter(Boolean);
+  const orderTypes = (searchParams.orderType ?? '').split(',').filter(Boolean);
+  const supplierIds = (searchParams.supplier ?? '').split(',').filter(Boolean);
+  const poMonths = (searchParams.poMonth ?? '').split(',').filter(Boolean);
   const page = Math.max(1, parseInt(searchParams.page ?? '1', 10) || 1);
 
   const where: Record<string, unknown> = {};
   if (statuses.length > 0) where.status = { in: statuses };
   if (paymentStatuses.length > 0) where.paymentStatus = { in: paymentStatuses };
   if (batchIds.length > 0) where.poBatchId = { in: batchIds };
+  if (orderTypes.length > 0) where.orderType = { in: orderTypes };
+  if (supplierIds.length > 0) where.supplierId = { in: supplierIds };
+  if (poMonths.length > 0) where.poMonth = { in: poMonths };
   if (q) {
     where.OR = [
       { orderNumber: { contains: q, mode: 'insensitive' } },
       { customer: { name: { contains: q, mode: 'insensitive' } } },
       { customer: { phone: { contains: q } } },
+      { items: { some: { bookTitle: { contains: q, mode: 'insensitive' } } } },
+      { items: { some: { isbn: { contains: q } } } },
     ];
   }
 
-  const [orders, total, poBatches] = await Promise.all([
+  const [orders, total, poBatches, suppliers, poMonthRows] = await Promise.all([
     prisma.order.findMany({
       where,
       orderBy: { orderDate: 'desc' },
       skip: (page - 1) * PAGE_SIZE,
       take: PAGE_SIZE,
-      include: { customer: true, poBatch: { select: { id: true, name: true } } },
+      include: { customer: true, poBatch: { select: { id: true, name: true } }, supplier: true },
     }),
     prisma.order.count({ where }),
     prisma.purchaseBatch.findMany({ orderBy: { batchDate: 'desc' }, select: { id: true, name: true } }),
+    prisma.supplier.findMany({ where: { isActive: true }, orderBy: { name: 'asc' }, select: { id: true, name: true } }),
+    prisma.order.findMany({
+      where: { poMonth: { not: null } },
+      distinct: ['poMonth'],
+      select: { poMonth: true },
+      orderBy: { poMonth: 'desc' },
+    }),
   ]);
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -73,9 +97,21 @@ export default async function OrdersPage({
     if (statuses.length) params.set('status', statuses.join(','));
     if (paymentStatuses.length) params.set('paymentStatus', paymentStatuses.join(','));
     if (batchIds.length) params.set('batch', batchIds.join(','));
+    if (orderTypes.length) params.set('orderType', orderTypes.join(','));
+    if (supplierIds.length) params.set('supplier', supplierIds.join(','));
+    if (poMonths.length) params.set('poMonth', poMonths.join(','));
     params.set('page', String(p));
     return `/admin/orders?${params.toString()}`;
   }
+
+  const exportParams = new URLSearchParams();
+  if (q) exportParams.set('q', q);
+  if (statuses.length) exportParams.set('status', statuses.join(','));
+  if (paymentStatuses.length) exportParams.set('paymentStatus', paymentStatuses.join(','));
+  if (batchIds.length) exportParams.set('batch', batchIds.join(','));
+  if (orderTypes.length) exportParams.set('orderType', orderTypes.join(','));
+  if (supplierIds.length) exportParams.set('supplier', supplierIds.join(','));
+  if (poMonths.length) exportParams.set('poMonth', poMonths.join(','));
 
   return (
     <div className="p-6">
@@ -86,8 +122,8 @@ export default async function OrdersPage({
         </div>
         <div className="flex w-full flex-wrap gap-2 sm:w-auto">
           <Button variant="outline" size="sm" asChild className="flex-1 sm:flex-none">
-            <a href="/api/export/orders" download>
-              <Download className="h-4 w-4" /> Export
+            <a href={`/api/export/orders?${exportParams.toString()}`} download>
+              <Download className="h-4 w-4" /> Export ({total} filtered)
             </a>
           </Button>
           <Button asChild className="flex-1 sm:flex-none">
@@ -99,7 +135,24 @@ export default async function OrdersPage({
       </div>
 
       <div className="mb-4 flex flex-wrap gap-3">
-        <SearchBox placeholder="Search by order # or customer…" />
+        <SearchBox placeholder="Search order #, customer, judul buku, ISBN…" />
+        <MultiSelectFilter
+          paramKey="orderType"
+          label="Order type"
+          options={orderTypeValues.map((t) => ({ value: t, label: orderTypeLabels[t] }))}
+        />
+        <MultiSelectFilter
+          paramKey="supplier"
+          label="Supplier"
+          options={suppliers.map((s) => ({ value: s.id, label: s.name }))}
+        />
+        <MultiSelectFilter
+          paramKey="poMonth"
+          label="Bulan PO"
+          options={poMonthRows
+            .filter((r) => r.poMonth)
+            .map((r) => ({ value: r.poMonth as string, label: r.poMonth as string }))}
+        />
         <MultiSelectFilter
           paramKey="status"
           label="Status"
@@ -124,8 +177,9 @@ export default async function OrdersPage({
               <tr>
                 <th className="px-4 py-3 font-medium">Order #</th>
                 <th className="px-4 py-3 font-medium">Customer</th>
-                <th className="px-4 py-3 font-medium">PO Batch</th>
-                <th className="px-4 py-3 font-medium">Expected arrival</th>
+                <th className="px-4 py-3 font-medium">Type</th>
+                <th className="px-4 py-3 font-medium">Supplier</th>
+                <th className="px-4 py-3 font-medium">PO / ETA</th>
                 <th className="px-4 py-3 font-medium">Status</th>
                 <th className="px-4 py-3 font-medium">Payment</th>
                 <th className="px-4 py-3 font-medium text-right">Total</th>
@@ -141,16 +195,22 @@ export default async function OrdersPage({
                     </Link>
                   </td>
                   <td className="px-4 py-3">{o.customer.name}</td>
+                  <td className="px-4 py-3">
+                    <span className="inline-flex items-center rounded-full bg-accent px-2 py-0.5 text-xs font-medium text-accent-foreground">
+                      {orderTypeLabels[o.orderType] ?? o.orderType}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-muted-foreground">{o.supplier?.name ?? '—'}</td>
                   <td className="px-4 py-3 text-muted-foreground">
-                    {o.poBatch ? (
-                      <Link href={`/admin/po-batches/${o.poBatch.id}`} className="hover:text-primary hover:underline">
-                        {o.poBatch.name}
-                      </Link>
+                    {o.poMonth ? (
+                      <span>
+                        PO {o.poMonth}
+                        {o.etaMonth ? ` · ETA ${o.etaMonth}` : ''}
+                      </span>
                     ) : (
-                      '—'
+                      formatDate(o.expectedArrivalDate)
                     )}
                   </td>
-                  <td className="px-4 py-3 text-muted-foreground">{formatDate(o.expectedArrivalDate)}</td>
                   <td className="px-4 py-3">
                     <OrderStatusBadge status={o.status} />
                   </td>
@@ -172,7 +232,7 @@ export default async function OrdersPage({
               ))}
               {orders.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-4 py-10 text-center text-muted-foreground">
+                  <td colSpan={9} className="px-4 py-10 text-center text-muted-foreground">
                     No orders found.
                   </td>
                 </tr>

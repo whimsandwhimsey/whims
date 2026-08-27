@@ -28,7 +28,20 @@ const BATCH_TYPE_LABELS: Record<string, string> = {
   READY_STOCK: 'Ready Stock',
 };
 
-export default async function OrderDetailPage({ params }: { params: { id: string } }) {
+const ORDER_TYPE_LABELS: Record<string, string> = {
+  READY_STOCK: 'Ready stock',
+  EVENT_JASTIP: 'Event / jastip',
+  PO_REGULAR: 'PO reguler',
+  PO_REMAINDER: 'PO remainder',
+};
+
+export default async function OrderDetailPage({
+  params,
+  searchParams,
+}: {
+  params: { id: string };
+  searchParams: { merged?: string };
+}) {
   const order = await prisma.order.findUnique({
     where: { id: params.id },
     include: {
@@ -37,6 +50,7 @@ export default async function OrderDetailPage({ params }: { params: { id: string
       payments: { orderBy: { date: 'desc' } },
       invoices: { orderBy: { issuedAt: 'desc' } },
       poBatch: true,
+      supplier: true,
     },
   });
   if (!order) notFound();
@@ -48,6 +62,13 @@ export default async function OrderDetailPage({ params }: { params: { id: string
 
   return (
     <div className="p-6">
+      {searchParams.merged === '1' && (
+        <div className="mb-4 rounded-md border border-success/30 bg-success/10 px-4 py-2.5 text-sm text-success">
+          These items were added to this existing order — same customer, PO month, order type,
+          and supplier as before, so they merged into one invoice instead of a new order.
+        </div>
+      )}
+
       <div className="mb-4 flex items-center justify-between">
         <Link
           href="/admin/orders"
@@ -75,6 +96,15 @@ export default async function OrderDetailPage({ params }: { params: { id: string
           <p className="text-sm text-muted-foreground">
             {order.customer.name} · {order.customer.phone}
           </p>
+          <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+            <span className="inline-flex items-center rounded-full bg-accent px-2 py-0.5 font-medium text-accent-foreground">
+              {ORDER_TYPE_LABELS[order.orderType] ?? order.orderType}
+            </span>
+            {order.eventName && <span className="text-muted-foreground">{order.eventName}</span>}
+            {order.poMonth && <span className="text-muted-foreground">PO {order.poMonth}</span>}
+            {order.etaMonth && <span className="text-muted-foreground">ETA {order.etaMonth}</span>}
+            {order.supplier && <span className="text-muted-foreground">{order.supplier.name}</span>}
+          </div>
           {order.poBatch && (
             <Link
               href={`/admin/po-batches/${order.poBatch.id}`}

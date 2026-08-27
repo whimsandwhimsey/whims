@@ -6,6 +6,7 @@ import { orderSchema, orderStatusValues } from '@/lib/validations';
 import { requireStaffSession } from '@/lib/guards';
 import { writeAuditLog } from '@/lib/audit';
 import { generateOrderNumberWithRetry } from '@/lib/order-number';
+import { findMergeableOrder, isMergeableOrderType } from '@/lib/order-merge';
 import {
   computeOrderTotals,
   computePaymentStatus,
@@ -18,6 +19,11 @@ import type { Prisma } from '@prisma/client';
 export type SaveOrderInput = {
   id?: string;
   customerId: string;
+  orderType: string;
+  poMonth?: string;
+  etaMonth?: string;
+  eventName?: string;
+  supplierId?: string | null;
   poBatchId?: string | null;
   orderDate: string;
   expectedArrivalDate?: string;
@@ -37,7 +43,7 @@ export type SaveOrderInput = {
 };
 
 export type SaveOrderResult =
-  | { success: true; orderId: string; orderNumber: string }
+  | { success: true; orderId: string; orderNumber: string; merged: boolean }
   | { success: false; error: string };
 
 /**
@@ -126,6 +132,11 @@ export async function saveOrder(input: SaveOrderInput): Promise<SaveOrderResult>
           where: { id: input.id },
           data: {
             customerId: data.customerId,
+            orderType: data.orderType as any,
+            poMonth: isMergeableOrderType(data.orderType) ? data.poMonth || null : null,
+            etaMonth: data.etaMonth || null,
+            eventName: data.orderType === 'EVENT_JASTIP' ? data.eventName || null : null,
+            supplierId: data.supplierId || null,
             poBatchId: data.poBatchId || null,
             orderDate: new Date(data.orderDate),
             expectedArrivalDate,
@@ -169,10 +180,85 @@ export async function saveOrder(input: SaveOrderInput): Promise<SaveOrderResult>
       revalidatePath('/admin/orders');
       revalidatePath(`/admin/orders/${order.id}`);
       revalidatePath('/admin/books');
-      return { success: true, orderId: order.id, orderNumber: order.orderNumber };
+      return { success: true, orderId: order.id, orderNumber: order.orderNumber, merged: false };
     }
 
-    // ── Create new order ──
+    // ── Create new order (or merge into an existing open one) ──
+    const mergeTarget = await prisma.$transaction((tx) =>
+      findMergeableOrder(tx, {
+        customerId: data.customerId,
+        orderType: data.orderType,
+        poMonth: data.poMonth || null,
+        supplierId: data.supplierId || null,
+      })
+    );
+
+    if (mergeTarget) {
+      const order = await prisma.$transaction(async (tx) => {
+        const itemsWithBookIds = await Promise.all(
+          data.items.map(async (item) => ({
+            ...item,
+            resolvedBookId: await resolveOrCreateBookId(tx, item),
+          }))
+        );
+
+        await tx.orderItem.createMany({
+          data: itemsWithBookIds.map((item) => ({
+            orderId: mergeTarget.id,
+            bookId: item.resolvedBookId,
+            bookTitle: item.bookTitle,
+            isbn: item.isbn || null,
+            format: (item.format as any) || null,
+            quantity: item.quantity,
+            sellingPrice: item.sellingPrice,
+            cogs: item.cogs,
+            discount: item.discount,
+            subtotal: computeItemSubtotal(item),
+          })),
+        });
+
+        // Recompute totals from the order's FULL item set (existing + just
+        // added) — never from just the new items, or the order total would
+        // silently drop everything submitted before this merge.
+        const allItems = await tx.orderItem.findMany({ where: { orderId: mergeTarget.id } });
+        const newTotals = computeOrderTotals(
+          allItems.map((it) => ({
+            sellingPrice: toNumber(it.sellingPrice),
+            quantity: it.quantity,
+            discount: toNumber(it.discount),
+            cogs: toNumber(it.cogs),
+          }))
+        );
+        const amountPaid = toNumber(mergeTarget.amountPaid);
+
+        return tx.order.update({
+          where: { id: mergeTarget.id },
+          data: {
+            subtotal: newTotals.subtotal,
+            discountTotal: newTotals.discountTotal,
+            totalAmount: newTotals.totalAmount,
+            totalCogs: newTotals.totalCogs,
+            profit: newTotals.profit,
+            paymentStatus: computePaymentStatus(newTotals.totalAmount, amountPaid),
+            outstandingBalance: computeOutstandingBalance(newTotals.totalAmount, amountPaid),
+          },
+        });
+      });
+
+      await writeAuditLog({
+        userId: session.user.id,
+        action: 'UPDATE',
+        entityType: 'Order',
+        entityId: order.id,
+        summary: `Merged ${data.items.length} new item(s) into existing order ${order.orderNumber} for ${customer.name} (same customer + PO month + order type + supplier)`,
+      });
+
+      revalidatePath('/admin/orders');
+      revalidatePath(`/admin/orders/${order.id}`);
+      revalidatePath('/admin/books');
+      return { success: true, orderId: order.id, orderNumber: order.orderNumber, merged: true };
+    }
+
     const orderNumber = await generateOrderNumberWithRetry();
     const paymentStatus = computePaymentStatus(totals.totalAmount, 0);
 
@@ -188,6 +274,11 @@ export async function saveOrder(input: SaveOrderInput): Promise<SaveOrderResult>
         data: {
           orderNumber,
           customerId: data.customerId,
+          orderType: data.orderType as any,
+          poMonth: isMergeableOrderType(data.orderType) ? data.poMonth || null : null,
+          etaMonth: data.etaMonth || null,
+          eventName: data.orderType === 'EVENT_JASTIP' ? data.eventName || null : null,
+          supplierId: data.supplierId || null,
           poBatchId: data.poBatchId || null,
           orderDate: new Date(data.orderDate),
           expectedArrivalDate,
@@ -230,7 +321,7 @@ export async function saveOrder(input: SaveOrderInput): Promise<SaveOrderResult>
 
     revalidatePath('/admin/orders');
     revalidatePath('/admin/books');
-    return { success: true, orderId: order.id, orderNumber: order.orderNumber };
+    return { success: true, orderId: order.id, orderNumber: order.orderNumber, merged: false };
   } catch (err) {
     console.error(err);
     return { success: false, error: 'Something went wrong while saving the order.' };

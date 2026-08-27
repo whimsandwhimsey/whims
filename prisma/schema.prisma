@@ -29,6 +29,13 @@ enum PoBatchType {
   READY_STOCK   // already in stock, no waiting
 }
 
+enum OrderType {
+  READY_STOCK     // in stock, full payment upfront
+  EVENT_JASTIP    // jastip / event pre-order, full payment upfront
+  PO_REGULAR      // regular pre-order batch, DP allowed
+  PO_REMAINDER    // remainder/leftover pre-order batch, DP allowed
+}
+
 enum Courier {
   LION
   OJEK
@@ -182,6 +189,7 @@ model Supplier {
   updatedAt DateTime @updatedAt
 
   purchaseBatches PurchaseBatch[]
+  orders          Order[]
 
   @@index([name])
   @@map("suppliers")
@@ -238,8 +246,21 @@ model Order {
   status                OrderStatus @default(WAITING)
   notes                 String?
 
+  // Order type + the fields used to auto-merge repeat submissions into one
+  // invoice-worthy order (same customer + PO month + order type + supplier
+  // = same order — see lib/order-merge.ts). poMonth/etaMonth are "YYYY-MM"
+  // strings, only meaningful for PO_REGULAR / PO_REMAINDER; eventName is a
+  // free-text label for EVENT_JASTIP (e.g. "Big Bad Wolf 2026").
+  orderType             OrderType   @default(READY_STOCK)
+  poMonth               String?
+  etaMonth              String?
+  eventName             String?
+
   poBatchId             String?
   poBatch               PurchaseBatch? @relation(fields: [poBatchId], references: [id])
+
+  supplierId            String?
+  supplier              Supplier?   @relation(fields: [supplierId], references: [id])
 
   courier               Courier?
   trackingNumber        String?
@@ -271,6 +292,8 @@ model Order {
   @@index([status])
   @@index([orderDate])
   @@index([poBatchId])
+  @@index([supplierId])
+  @@index([customerId, orderType, poMonth, supplierId])
   @@map("orders")
 }
 

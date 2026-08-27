@@ -64,16 +64,44 @@ export const orderStatusValues = [
 
 export const courierValues = ['LION', 'OJEK', 'SHOPEE'] as const;
 
-export const orderSchema = z.object({
-  customerId: z.string().min(1, 'Please select a customer'),
-  poBatchId: z.string().optional().nullable(),
-  orderDate: z.string().min(1),
-  expectedArrivalDate: z.string().optional().or(z.literal('')),
-  actualArrivalDate: z.string().optional().or(z.literal('')),
-  status: z.enum(orderStatusValues),
-  notes: z.string().max(2000).optional().or(z.literal('')),
-  items: z.array(orderItemSchema).min(1, 'Add at least one book item'),
-});
+export const orderTypeValues = ['READY_STOCK', 'EVENT_JASTIP', 'PO_REGULAR', 'PO_REMAINDER'] as const;
+export const orderTypeLabels: Record<string, string> = {
+  READY_STOCK: 'Ready stock',
+  EVENT_JASTIP: 'Event / jastip',
+  PO_REGULAR: 'PO reguler',
+  PO_REMAINDER: 'PO remainder',
+};
+// PO month / ETA month / supplier only make sense for pre-order types —
+// ready stock and jastip are immediate, no batch to track.
+export const orderTypesWithPoMonth = ['PO_REGULAR', 'PO_REMAINDER'] as const;
+
+const monthStringSchema = z
+  .string()
+  .regex(/^\d{4}-\d{2}$/, 'Use YYYY-MM format')
+  .optional()
+  .or(z.literal(''));
+
+export const orderSchema = z
+  .object({
+    customerId: z.string().min(1, 'Please select a customer'),
+    orderType: z.enum(orderTypeValues),
+    poMonth: monthStringSchema,
+    etaMonth: monthStringSchema,
+    eventName: z.string().max(200).optional().or(z.literal('')),
+    supplierId: z.string().optional().or(z.literal('')),
+    poBatchId: z.string().optional().nullable(),
+    orderDate: z.string().min(1),
+    expectedArrivalDate: z.string().optional().or(z.literal('')),
+    actualArrivalDate: z.string().optional().or(z.literal('')),
+    status: z.enum(orderStatusValues),
+    notes: z.string().max(2000).optional().or(z.literal('')),
+    items: z.array(orderItemSchema).min(1, 'Add at least one book item'),
+  })
+  .refine(
+    (data) =>
+      !(orderTypesWithPoMonth as readonly string[]).includes(data.orderType) || !!data.poMonth,
+    { message: 'PO month is required for PO reguler / remainder orders', path: ['poMonth'] }
+  );
 export type OrderFormValues = z.infer<typeof orderSchema>;
 
 export const paymentMethodValues = ['QRIS', 'BANK_TRANSFER'] as const;

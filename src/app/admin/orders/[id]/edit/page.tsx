@@ -5,7 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { OrderForm } from '../../order-form';
 
 export default async function EditOrderPage({ params }: { params: { id: string } }) {
-  const [order, customers, books, poBatches] = await Promise.all([
+  const [order, customers, books, poBatches, suppliers] = await Promise.all([
     prisma.order.findUnique({
       where: { id: params.id },
       include: { items: true },
@@ -17,6 +17,7 @@ export default async function EditOrderPage({ params }: { params: { id: string }
       select: { id: true, title: true, isbn: true, format: true },
     }),
     prisma.purchaseBatch.findMany({ orderBy: { batchDate: 'desc' }, select: { id: true, name: true, type: true, expectedArrivalDate: true } }),
+    prisma.supplier.findMany({ where: { isActive: true }, orderBy: { name: 'asc' }, select: { id: true, name: true } }),
   ]);
 
   if (!order) notFound();
@@ -33,7 +34,7 @@ export default async function EditOrderPage({ params }: { params: { id: string }
       <h1 className="mb-6 font-display text-2xl font-semibold text-primary">Edit {order.orderNumber}</h1>
 
       <div className="max-w-3xl">
-        <OrderForm customers={customers} books={books} poBatches={poBatches} order={order} />
+        <OrderForm customers={customers} books={books} poBatches={poBatches} suppliers={suppliers} order={order} />
       </div>
     </div>
   );

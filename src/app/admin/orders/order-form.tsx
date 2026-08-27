@@ -12,7 +12,14 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { SearchableSelect } from '@/components/searchable-select';
 import { formatCurrency } from '@/lib/utils';
 import { computeOrderTotals, computeItemSubtotal, toNumber } from '@/lib/calculations';
-import { orderStatusValues, bookFormatValues, bookFormatLabels } from '@/lib/validations';
+import {
+  orderStatusValues,
+  bookFormatValues,
+  bookFormatLabels,
+  orderTypeValues,
+  orderTypeLabels,
+  orderTypesWithPoMonth,
+} from '@/lib/validations';
 import { saveOrder, type SaveOrderInput } from './actions';
 import { quickCreateCustomer } from '../customers/actions';
 
@@ -24,6 +31,7 @@ type Book = {
   format: string | null;
 };
 type PoBatch = { id: string; name: string; type: string; expectedArrivalDate: Date | null };
+type Supplier = { id: string; name: string };
 
 type ItemRow = {
   key: string;
@@ -40,6 +48,11 @@ type ItemRow = {
 type ExistingOrder = {
   id: string;
   customerId: string;
+  orderType: string;
+  poMonth: string | null;
+  etaMonth: string | null;
+  eventName: string | null;
+  supplierId: string | null;
   poBatchId: string | null;
   orderDate: Date;
   expectedArrivalDate: Date | null;
@@ -80,11 +93,13 @@ export function OrderForm({
   customers,
   books,
   poBatches,
+  suppliers,
   order,
 }: {
   customers: Customer[];
   books: Book[];
   poBatches: PoBatch[];
+  suppliers: Supplier[];
   order?: ExistingOrder;
 }) {
   const router = useRouter();
@@ -99,6 +114,11 @@ export function OrderForm({
   const [newCustomerAddress, setNewCustomerAddress] = useState('');
   const [newCustomerError, setNewCustomerError] = useState<string | null>(null);
   const [isCreatingCustomer, startCreatingCustomer] = useTransition();
+  const [orderType, setOrderType] = useState(order?.orderType ?? 'READY_STOCK');
+  const [poMonth, setPoMonth] = useState(order?.poMonth ?? '');
+  const [etaMonth, setEtaMonth] = useState(order?.etaMonth ?? '');
+  const [eventName, setEventName] = useState(order?.eventName ?? '');
+  const [supplierId, setSupplierId] = useState(order?.supplierId ?? '');
   const [poBatchId, setPoBatchId] = useState(order?.poBatchId ?? '');
   const [orderDate, setOrderDate] = useState(
     toDateInputValue(order?.orderDate) || new Date().toISOString().slice(0, 10)
@@ -111,6 +131,8 @@ export function OrderForm({
   );
   const [status, setStatus] = useState(order?.status ?? 'WAITING');
   const [notes, setNotes] = useState(order?.notes ?? '');
+
+  const needsPoMonth = (orderTypesWithPoMonth as readonly string[]).includes(orderType);
 
   const [items, setItems] = useState<ItemRow[]>(
     order?.items.length
@@ -190,6 +212,10 @@ export function OrderForm({
     () => poBatches.map((b) => ({ value: b.id, label: b.name })),
     [poBatches]
   );
+  const supplierOptions = useMemo(
+    () => suppliers.map((s) => ({ value: s.id, label: s.name })),
+    [suppliers]
+  );
   const bookOptions = useMemo(
     () =>
       books.map((b) => ({
@@ -260,6 +286,10 @@ export function OrderForm({
       setError('Please select a customer.');
       return;
     }
+    if (needsPoMonth && !poMonth) {
+      setError('PO month is required for PO reguler / remainder orders.');
+      return;
+    }
     if (items.some((it) => !it.bookTitle.trim())) {
       setError('Every item needs a book title.');
       return;
@@ -268,6 +298,11 @@ export function OrderForm({
     const payload: SaveOrderInput = {
       id: order?.id,
       customerId,
+      orderType,
+      poMonth: needsPoMonth ? poMonth : undefined,
+      etaMonth: etaMonth || undefined,
+      eventName: orderType === 'EVENT_JASTIP' ? eventName : undefined,
+      supplierId: supplierId || null,
       poBatchId: poBatchId || null,
       orderDate,
       expectedArrivalDate: expectedArrivalDate || undefined,
@@ -292,7 +327,13 @@ export function OrderForm({
         setError(result.error);
         return;
       }
-      router.push(`/admin/orders/${result.orderId}`);
+      if (result.merged) {
+        // Same customer + PO month + order type + supplier as an existing
+        // open order — items were appended there instead of a new order.
+        router.push(`/admin/orders/${result.orderId}?merged=1`);
+      } else {
+        router.push(`/admin/orders/${result.orderId}`);
+      }
       router.refresh();
     });
   }
@@ -371,6 +412,73 @@ export function OrderForm({
               </div>
             )}
           </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="orderType">Order type</Label>
+            <Select
+              id="orderType"
+              value={orderType}
+              onChange={(e) => setOrderType(e.target.value)}
+            >
+              {orderTypeValues.map((t) => (
+                <option key={t} value={t}>
+                  {orderTypeLabels[t]}
+                </option>
+              ))}
+            </Select>
+          </div>
+
+          {orderType === 'EVENT_JASTIP' && (
+            <div className="space-y-1.5">
+              <Label htmlFor="eventName">Event / jastip name</Label>
+              <Input
+                id="eventName"
+                value={eventName}
+                onChange={(e) => setEventName(e.target.value)}
+                placeholder="e.g. Big Bad Wolf 2026"
+              />
+            </div>
+          )}
+
+          {needsPoMonth && (
+            <>
+              <div className="space-y-1.5">
+                <Label htmlFor="poMonth">PO month</Label>
+                <Input
+                  id="poMonth"
+                  type="month"
+                  value={poMonth}
+                  onChange={(e) => setPoMonth(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="etaMonth">ETA month</Label>
+                <Input
+                  id="etaMonth"
+                  type="month"
+                  value={etaMonth}
+                  onChange={(e) => setEtaMonth(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="supplierId">Supplier</Label>
+                <SearchableSelect
+                  id="supplierId"
+                  options={supplierOptions}
+                  value={supplierId}
+                  onChange={setSupplierId}
+                  placeholder="Cari supplier…"
+                  emptyLabel="— No supplier —"
+                />
+              </div>
+              <div className="rounded-md border border-border bg-secondary/50 p-3 text-xs text-muted-foreground sm:col-span-2">
+                Customer, PO month, order type, and supplier that match an existing open order
+                will automatically merge into that order&apos;s invoice instead of creating a
+                new one.
+              </div>
+            </>
+          )}
 
           <div className="space-y-1.5">
             <Label htmlFor="poBatchId">PO Batch (optional)</Label>

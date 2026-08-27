@@ -1,0 +1,86 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+  Palette — "Slow Reads": derived from the brand logo (sage green wordmark,
+  black cat mascot, warm white background). Friendly and a little playful,
+  matching a cozy neighborhood bookstore rather than a corporate back-office.
+*/
+@layer base {
+  :root {
+    --background: 90 25% 97%;        /* warm, faintly sage-tinted white */
+    --foreground: 0 0% 12%;          /* near-black, matches the cat mascot */
+
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 12%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 12%;
+
+    --primary: 85 24% 36%;           /* deep sage green (buttons, links) */
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 85 22% 93%;         /* light sage, from the logo wordmark */
+    --secondary-foreground: 85 24% 22%;
+
+    --muted: 85 16% 94%;
+    --muted-foreground: 0 0% 38%;
+
+    --accent: 85 22% 90%;
+    --accent-foreground: 85 24% 24%;
+
+    --destructive: 3 72% 46%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 152 40% 32%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 38 85% 45%;
+    --warning-foreground: 0 0% 100%;
+
+    --brass: 81 21% 60%;             /* sage accent, used for highlights */
+
+    --border: 85 16% 88%;
+    --input: 85 16% 88%;
+    --ring: 85 24% 36%;
+
+    --radius: 1rem;
+  }
+
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  }
+}
+
+@layer utilities {
+  .font-display {
+    font-family: var(--font-baloo), 'Baloo 2', system-ui, sans-serif;
+  }
+}
+
+/*
+  Invoice printing: hide everything on the page except the element with
+  id="invoice-print-area" (regardless of whether it's sitting inside the
+  admin sidebar layout or the portal layout) so window.print() from any
+  invoice page produces just the invoice, full page, no chrome.
+*/
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #invoice-print-area,
+  #invoice-print-area * {
+    visibility: visible;
+  }
+  #invoice-print-area {
+    position: absolute;
+    inset: 0;
+    margin: 0;
+    padding: 1rem;
+  }
+}

@@ -171,18 +171,22 @@ export async function generateInvoicesForBatch(batchId: string): Promise<Generat
       continue;
     }
 
-    const invoiceNumber = await generateInvoiceNumber();
+        const invoiceNumber = await generateInvoiceNumber();
     await prisma.invoice.create({
       data: {
         invoiceNumber,
         orderId: order.id,
         type: invoiceType,
         amount,
+        amountPaid: 0,
+        outstandingBalance: amount,
+        paymentStatus: 'UNPAID',
         issuedById: session.user.id,
       },
     });
     created++;
   }
+
 
   await writeAuditLog({
     userId: session.user.id,

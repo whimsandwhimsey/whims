@@ -55,6 +55,8 @@ export type OrderItemFormValues = z.infer<typeof orderItemSchema>;
 
 export const orderStatusValues = [
   'WAITING',
+  'IN_TRANSIT',
+  'ARRIVED_COUNTRY',
   'ARRIVED',
   'READY_TO_SHIP',
   'SHIPPED',
@@ -89,6 +91,8 @@ export const orderSchema = z
     etaMonth: monthStringSchema,
     eventName: z.string().max(200).optional().or(z.literal('')),
     supplierId: z.string().optional().or(z.literal('')),
+    dpType: z.enum(['PERCENTAGE', 'FIXED_PER_BOOK', 'FIXED_TOTAL']).optional(),
+    dpValue: z.coerce.number().min(0).optional(),
     poBatchId: z.string().optional().nullable(),
     orderDate: z.string().min(1),
     expectedArrivalDate: z.string().optional().or(z.literal('')),

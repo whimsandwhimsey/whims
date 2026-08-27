@@ -66,12 +66,20 @@ enum StaffRole {
 }
 
 enum OrderStatus {
-  WAITING          // placed, waiting to arrive at warehouse
-  ARRIVED          // arrived at warehouse
-  READY_TO_SHIP    // packed / ready
-  SHIPPED          // sent to customer
+  WAITING          // open — placed, not yet shipped from supplier
+  IN_TRANSIT       // dalam perjalanan ke Indonesia
+  ARRIVED_COUNTRY  // tiba di Indonesia (customs/port)
+  ARRIVED          // tiba di gudang kita
+  READY_TO_SHIP    // packed / ready (internal packing step)
+  SHIPPED          // terkirim ke customer
   COMPLETED        // delivered & closed
   CANCELLED
+}
+
+enum DpType {
+  PERCENTAGE      // dpValue = percent of order total, e.g. 25 = 25%
+  FIXED_PER_BOOK  // dpValue = rupiah per book (x total quantity)
+  FIXED_TOTAL     // dpValue = flat rupiah amount for the whole order
 }
 
 enum PaymentMethod {
@@ -256,6 +264,13 @@ model Order {
   etaMonth              String?
   eventName             String?
 
+  // DP rule for this order (only meaningful for PO_REGULAR / PO_REMAINDER).
+  // Set once when the order is first created; carried through automatically
+  // for any later items merged into it (see lib/order-merge.ts) and used to
+  // auto-compute the amount of the DEPOSIT invoice.
+  dpType                DpType?
+  dpValue               Decimal?    @db.Decimal(12, 2)
+
   poBatchId             String?
   poBatch               PurchaseBatch? @relation(fields: [poBatchId], references: [id])
 
@@ -329,8 +344,10 @@ model Payment {
   id            String        @id @default(cuid())
   customerId    String
   customer      Customer      @relation(fields: [customerId], references: [id])
-  orderId       String?
+  orderId       String?       // denormalized from invoice.orderId, for fast order-level lookups
   order         Order?        @relation(fields: [orderId], references: [id])
+  invoiceId     String?       // the specific invoice this payment pays down — chosen manually
+  invoice       Invoice?      @relation(fields: [invoiceId], references: [id])
   date          DateTime      @default(now())
   amount        Decimal       @db.Decimal(12, 2)
   method        PaymentMethod
@@ -340,11 +357,9 @@ model Payment {
   recordedBy    User?         @relation("PaymentRecordedBy", fields: [recordedById], references: [id])
   createdAt     DateTime      @default(now())
 
-  depositTxns   DepositTransaction[]
-  invoices      Invoice[]
-
   @@index([customerId])
   @@index([orderId])
+  @@index([invoiceId])
   @@map("payments")
 }
 
@@ -356,10 +371,10 @@ model DepositTransaction {
   type          DepositTxnType
   amount        Decimal        @db.Decimal(12, 2) // always positive; sign implied by type
   balanceAfter  Decimal        @db.Decimal(12, 2)
-  orderId       String?
+  orderId       String?        // denormalized from invoice.orderId, for fast order-level lookups
   order         Order?         @relation(fields: [orderId], references: [id])
-  paymentId     String?
-  payment       Payment?       @relation(fields: [paymentId], references: [id])
+  invoiceId     String?        // for USED: the specific invoice this deposit was applied to
+  invoice       Invoice?       @relation(fields: [invoiceId], references: [id])
   notes         String?
 
   createdById   String?
@@ -367,28 +382,39 @@ model DepositTransaction {
   createdAt     DateTime       @default(now())
 
   @@index([customerId])
+  @@index([invoiceId])
   @@map("deposit_transactions")
 }
 
-/// Generated PDF invoices
+/// Generated invoices — the actual billing unit. Each invoice tracks its own
+/// amountPaid/outstandingBalance/paymentStatus, computed by replaying its
+/// Payments + DepositTransactions (see lib/invoice-calculations.ts) — never
+/// edited directly. An Order can have several invoices over time (e.g. a
+/// DEPOSIT invoice, then a FINAL_PAYMENT invoice once stock arrives, plus a
+/// separate invoice for any items merged in later — see lib/order-merge.ts).
 model Invoice {
-  id             String      @id @default(cuid())
-  invoiceNumber  String      @unique
+  id             String        @id @default(cuid())
+  invoiceNumber  String        @unique
   orderId        String
-  order          Order       @relation(fields: [orderId], references: [id])
-  paymentId      String?
-  payment        Payment?    @relation(fields: [paymentId], references: [id])
+  order          Order         @relation(fields: [orderId], references: [id])
   type           InvoiceType
-  amount         Decimal     @db.Decimal(12, 2)
-  pdfPath        String?     // relative path / object-storage key
-  issuedAt       DateTime    @default(now())
+  amount         Decimal       @db.Decimal(12, 2)
+  pdfPath        String?       // relative path / object-storage key
 
-  paidAt         DateTime?   // manually confirmed by staff once payment for this invoice is in hand
-  sentAt         DateTime?   // set automatically when sent via WhatsApp (or toggled manually)
+  amountPaid          Decimal       @default(0) @db.Decimal(12, 2)
+  outstandingBalance  Decimal       @db.Decimal(12, 2)
+  paymentStatus       PaymentStatus @default(UNPAID)
+
+  issuedAt       DateTime      @default(now())
+  paidAt         DateTime?     // set automatically once outstandingBalance hits 0
+  sentAt         DateTime?     // set automatically when sent via WhatsApp (or toggled manually)
 
   issuedById     String?
-  issuedBy       User?       @relation("InvoiceIssuedBy", fields: [issuedById], references: [id])
-  createdAt      DateTime    @default(now())
+  issuedBy       User?         @relation("InvoiceIssuedBy", fields: [issuedById], references: [id])
+  createdAt      DateTime      @default(now())
+
+  payments       Payment[]
+  depositTxns    DepositTransaction[]
 
   @@index([orderId])
   @@map("invoices")

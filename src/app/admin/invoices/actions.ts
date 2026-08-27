@@ -11,7 +11,6 @@ const createInvoiceSchema = z.object({
   orderId: z.string().min(1),
   type: z.enum(['DEPOSIT', 'FINAL_PAYMENT', 'READY_STOCK']),
   amount: z.coerce.number().positive('Amount must be greater than zero'),
-  paymentId: z.string().optional().nullable(),
 });
 
 export type ActionResult =
@@ -39,7 +38,9 @@ export async function createInvoice(input: z.infer<typeof createInvoiceSchema>):
         orderId: data.orderId,
         type: data.type,
         amount: data.amount,
-        paymentId: data.paymentId || null,
+        amountPaid: 0,
+        outstandingBalance: data.amount,
+        paymentStatus: 'UNPAID',
         issuedById: session.user.id,
       },
     });
@@ -75,29 +76,6 @@ export async function deleteInvoice(id: string) {
 
   revalidatePath(`/admin/orders/${invoice.orderId}`);
   revalidatePath('/admin/invoices');
-}
-
-/** Manual "confirmed paid" marker — a bookkeeping reminder, not the source of
- * truth for money received (Payments are). Lets staff track at a glance
- * which invoices (e.g. a DP) have actually been settled. */
-export async function markInvoicePaid(id: string, paid: boolean) {
-  const session = await requireStaffSession();
-  const invoice = await prisma.invoice.update({
-    where: { id },
-    data: { paidAt: paid ? new Date() : null },
-  });
-
-  await writeAuditLog({
-    userId: session.user.id,
-    action: 'UPDATE',
-    entityType: 'Invoice',
-    entityId: id,
-    summary: `Marked invoice ${invoice.invoiceNumber} as ${paid ? 'paid' : 'unpaid'}`,
-  });
-
-  revalidatePath(`/admin/orders/${invoice.orderId}`);
-  revalidatePath('/admin/invoices');
-  revalidatePath(`/admin/invoices/${id}`);
 }
 
 /** Set automatically when "Send via WhatsApp" is used; also toggleable by

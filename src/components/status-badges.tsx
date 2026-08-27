@@ -2,6 +2,8 @@ import { cn } from '@/lib/utils';
 
 const ORDER_STATUS_STYLES: Record<string, string> = {
   WAITING: 'bg-muted text-muted-foreground',
+  IN_TRANSIT: 'bg-accent text-accent-foreground',
+  ARRIVED_COUNTRY: 'bg-accent text-accent-foreground',
   ARRIVED: 'bg-blue-100 text-blue-800',
   READY_TO_SHIP: 'bg-amber-100 text-amber-800',
   SHIPPED: 'bg-indigo-100 text-indigo-800',
@@ -10,10 +12,12 @@ const ORDER_STATUS_STYLES: Record<string, string> = {
 };
 
 const ORDER_STATUS_LABELS: Record<string, string> = {
-  WAITING: 'Waiting',
-  ARRIVED: 'Arrived',
+  WAITING: 'Open',
+  IN_TRANSIT: 'Dalam perjalanan',
+  ARRIVED_COUNTRY: 'Tiba di Indonesia',
+  ARRIVED: 'Tiba di gudang',
   READY_TO_SHIP: 'Ready to Ship',
-  SHIPPED: 'Shipped',
+  SHIPPED: 'Terkirim',
   COMPLETED: 'Completed',
   CANCELLED: 'Cancelled',
 };

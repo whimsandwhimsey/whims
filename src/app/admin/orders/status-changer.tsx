@@ -7,10 +7,12 @@ import { orderStatusValues } from '@/lib/validations';
 import { updateOrderStatus } from './actions';
 
 const STATUS_LABELS: Record<string, string> = {
-  WAITING: 'Waiting',
-  ARRIVED: 'Arrived',
-  READY_TO_SHIP: 'Ready to Ship',
-  SHIPPED: 'Shipped',
+  WAITING: 'Open',
+  IN_TRANSIT: 'Dalam perjalanan ke Indonesia',
+  ARRIVED_COUNTRY: 'Tiba di Indonesia',
+  ARRIVED: 'Tiba di gudang',
+  READY_TO_SHIP: 'Ready to Ship (packed)',
+  SHIPPED: 'Terkirim',
   COMPLETED: 'Completed',
   CANCELLED: 'Cancelled',
 };

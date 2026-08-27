@@ -24,6 +24,8 @@ export type SaveOrderInput = {
   etaMonth?: string;
   eventName?: string;
   supplierId?: string | null;
+  dpType?: string;
+  dpValue?: number;
   poBatchId?: string | null;
   orderDate: string;
   expectedArrivalDate?: string;
@@ -136,6 +138,8 @@ export async function saveOrder(input: SaveOrderInput): Promise<SaveOrderResult>
             poMonth: isMergeableOrderType(data.orderType) ? data.poMonth || null : null,
             etaMonth: data.etaMonth || null,
             eventName: data.orderType === 'EVENT_JASTIP' ? data.eventName || null : null,
+            dpType: isMergeableOrderType(data.orderType) ? (data.dpType as any) || null : null,
+            dpValue: isMergeableOrderType(data.orderType) ? data.dpValue ?? null : null,
             supplierId: data.supplierId || null,
             poBatchId: data.poBatchId || null,
             orderDate: new Date(data.orderDate),
@@ -278,6 +282,8 @@ export async function saveOrder(input: SaveOrderInput): Promise<SaveOrderResult>
           poMonth: isMergeableOrderType(data.orderType) ? data.poMonth || null : null,
           etaMonth: data.etaMonth || null,
           eventName: data.orderType === 'EVENT_JASTIP' ? data.eventName || null : null,
+          dpType: isMergeableOrderType(data.orderType) ? (data.dpType as any) || null : null,
+          dpValue: isMergeableOrderType(data.orderType) ? data.dpValue ?? null : null,
           supplierId: data.supplierId || null,
           poBatchId: data.poBatchId || null,
           orderDate: new Date(data.orderDate),

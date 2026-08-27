@@ -53,6 +53,8 @@ type ExistingOrder = {
   etaMonth: string | null;
   eventName: string | null;
   supplierId: string | null;
+  dpType: string | null;
+  dpValue: unknown;
   poBatchId: string | null;
   orderDate: Date;
   expectedArrivalDate: Date | null;
@@ -119,6 +121,10 @@ export function OrderForm({
   const [etaMonth, setEtaMonth] = useState(order?.etaMonth ?? '');
   const [eventName, setEventName] = useState(order?.eventName ?? '');
   const [supplierId, setSupplierId] = useState(order?.supplierId ?? '');
+  const [dpType, setDpType] = useState(order?.dpType ?? 'PERCENTAGE');
+  const [dpValue, setDpValue] = useState(
+    order?.dpValue !== undefined && order?.dpValue !== null ? String(toNumber(order.dpValue)) : '25'
+  );
   const [poBatchId, setPoBatchId] = useState(order?.poBatchId ?? '');
   const [orderDate, setOrderDate] = useState(
     toDateInputValue(order?.orderDate) || new Date().toISOString().slice(0, 10)
@@ -303,6 +309,8 @@ export function OrderForm({
       etaMonth: etaMonth || undefined,
       eventName: orderType === 'EVENT_JASTIP' ? eventName : undefined,
       supplierId: supplierId || null,
+      dpType: needsPoMonth ? dpType : undefined,
+      dpValue: needsPoMonth ? Number(dpValue) : undefined,
       poBatchId: poBatchId || null,
       orderDate,
       expectedArrivalDate: expectedArrivalDate || undefined,
@@ -470,6 +478,28 @@ export function OrderForm({
                   onChange={setSupplierId}
                   placeholder="Cari supplier…"
                   emptyLabel="— No supplier —"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="dpType">DP rule</Label>
+                <Select id="dpType" value={dpType} onChange={(e) => setDpType(e.target.value)}>
+                  <option value="PERCENTAGE">Persen dari total</option>
+                  <option value="FIXED_PER_BOOK">Rupiah tetap per buku</option>
+                  <option value="FIXED_TOTAL">Rupiah tetap total order</option>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="dpValue">
+                  {dpType === 'PERCENTAGE' ? 'DP (%)' : 'DP (Rp)'}
+                </Label>
+                <Input
+                  id="dpValue"
+                  type="number"
+                  min="0"
+                  step={dpType === 'PERCENTAGE' ? '1' : '1000'}
+                  value={dpValue}
+                  onChange={(e) => setDpValue(e.target.value)}
+                  required
                 />
               </div>
               <div className="rounded-md border border-border bg-secondary/50 p-3 text-xs text-muted-foreground sm:col-span-2">

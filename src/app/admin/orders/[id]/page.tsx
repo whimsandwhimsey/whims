@@ -11,8 +11,7 @@ import { toNumber } from '@/lib/calculations';
 import { getCustomerDepositBalance } from '@/lib/deposit';
 import { StatusChanger } from '../status-changer';
 import { deleteOrder } from '../actions';
-import { RecordPaymentForm } from './record-payment-form';
-import { ApplyDepositForm } from './apply-deposit-form';
+import { InvoicePaymentActions } from './invoice-payment-actions';
 import { CreateInvoiceForm } from './create-invoice-form';
 import { bookFormatLabels } from '@/lib/validations';
 
@@ -162,14 +161,80 @@ export default async function OrderDetailPage({
           </Card>
 
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>Payments</CardTitle>
-              {outstanding > 0 && <RecordPaymentForm orderId={order.id} outstanding={outstanding} />}
+            <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <CardTitle>Invoices</CardTitle>
+              <CreateInvoiceForm
+                orderId={order.id}
+                orderType={order.orderType}
+                totalAmount={toNumber(order.totalAmount)}
+                totalQuantity={totalQuantity}
+                dpType={order.dpType}
+                dpValue={order.dpValue ? toNumber(order.dpValue) : null}
+                alreadyInvoiced={order.invoices.reduce((sum, inv) => sum + toNumber(inv.amount), 0)}
+              />
             </CardHeader>
             <CardContent className="space-y-4">
-              {outstanding > 0 && (
-                <ApplyDepositForm orderId={order.id} depositBalance={depositBalance} outstanding={outstanding} />
+              {order.invoices.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No invoices issued yet.</p>
+              ) : (
+                <div className="space-y-3">
+                  {order.invoices.map((inv) => (
+                    <div key={inv.id} className="rounded-md border border-border p-3">
+                      <div className="mb-2 flex items-center justify-between gap-2">
+                        <Link
+                          href={`/admin/invoices/${inv.id}`}
+                          className="text-sm font-medium hover:text-primary hover:underline"
+                        >
+                          {inv.invoiceNumber} · {INVOICE_TYPE_LABELS[inv.type] ?? inv.type}
+                        </Link>
+                        <div className="flex items-center gap-1.5">
+                          <PaymentStatusBadge status={inv.paymentStatus} />
+                          <span
+                            className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                              inv.sentAt ? 'bg-primary/15 text-primary' : 'bg-amber-100 text-amber-800'
+                            }`}
+                          >
+                            {inv.sentAt ? 'Sent' : 'Not sent'}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="mb-3 grid grid-cols-3 gap-2 text-xs text-muted-foreground">
+                        <div>
+                          Amount
+                          <p className="text-sm font-medium text-foreground">
+                            {formatCurrency(inv.amount.toString())}
+                          </p>
+                        </div>
+                        <div>
+                          Paid
+                          <p className="text-sm font-medium text-foreground">
+                            {formatCurrency(inv.amountPaid.toString())}
+                          </p>
+                        </div>
+                        <div>
+                          Outstanding
+                          <p className="text-sm font-medium text-foreground">
+                            {formatCurrency(inv.outstandingBalance.toString())}
+                          </p>
+                        </div>
+                      </div>
+                      <InvoicePaymentActions
+                        invoiceId={inv.id}
+                        outstanding={toNumber(inv.outstandingBalance)}
+                        depositBalance={depositBalance}
+                      />
+                    </div>
+                  ))}
+                </div>
               )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Payment history</CardTitle>
+            </CardHeader>
+            <CardContent>
               {order.payments.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No payments recorded yet.</p>
               ) : (
@@ -188,58 +253,6 @@ export default async function OrderDetailPage({
                           Edit
                         </Link>
                       </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <CardTitle>Invoices</CardTitle>
-              <CreateInvoiceForm
-                orderId={order.id}
-                amountPaid={toNumber(order.amountPaid)}
-                totalAmount={toNumber(order.totalAmount)}
-                outstandingBalance={toNumber(order.outstandingBalance)}
-                depositBalance={depositBalance}
-                poBatchType={order.poBatch?.type}
-                totalQuantity={totalQuantity}
-              />
-            </CardHeader>
-            <CardContent>
-              {order.invoices.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No invoices issued yet.</p>
-              ) : (
-                <ul className="divide-y divide-border">
-                  {order.invoices.map((inv) => (
-                    <li key={inv.id}>
-                      <Link
-                        href={`/admin/invoices/${inv.id}`}
-                        className="flex items-center justify-between gap-3 py-2 text-sm hover:text-primary"
-                      >
-                        <span>
-                          {inv.invoiceNumber} · {INVOICE_TYPE_LABELS[inv.type] ?? inv.type}
-                          <span className="ml-2 inline-flex gap-1">
-                            <span
-                              className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                                inv.paidAt ? 'bg-success/15 text-success' : 'bg-muted text-muted-foreground'
-                              }`}
-                            >
-                              {inv.paidAt ? 'Paid' : 'Unpaid'}
-                            </span>
-                            <span
-                              className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                                inv.sentAt ? 'bg-primary/15 text-primary' : 'bg-amber-100 text-amber-800'
-                              }`}
-                            >
-                              {inv.sentAt ? 'Sent' : 'Not sent'}
-                            </span>
-                          </span>
-                        </span>
-                        <span className="font-medium">{formatCurrency(inv.amount.toString())}</span>
-                      </Link>
                     </li>
                   ))}
                 </ul>

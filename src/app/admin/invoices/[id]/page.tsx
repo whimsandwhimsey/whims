@@ -5,8 +5,10 @@ import { prisma } from '@/lib/prisma';
 import { InvoiceDocument, type InvoiceDocumentData } from '@/components/invoice-document';
 import { InvoiceActions } from '@/components/invoice-actions';
 import { DeleteButton } from '@/components/delete-button';
+import { PaymentStatusBadge } from '@/components/status-badges';
 import { deleteInvoice } from '../actions';
 import { InvoiceStatusToggles } from './invoice-status-toggles';
+import { formatCurrency } from '@/lib/utils';
 import { toNumber } from '@/lib/calculations';
 
 export default async function AdminInvoiceDetailPage({ params }: { params: { id: string } }) {
@@ -59,8 +61,27 @@ export default async function AdminInvoiceDetailPage({ params }: { params: { id:
         />
       </div>
 
+      <div className="mx-auto mb-4 max-w-md rounded-md border border-border p-3 print:hidden">
+        <div className="mb-2 flex items-center justify-between">
+          <span className="text-sm text-muted-foreground">This invoice</span>
+          <PaymentStatusBadge status={invoice.paymentStatus} />
+        </div>
+        <div className="flex justify-between text-sm">
+          <span className="text-muted-foreground">Amount</span>
+          <span>{formatCurrency(toNumber(invoice.amount))}</span>
+        </div>
+        <div className="flex justify-between text-sm">
+          <span className="text-muted-foreground">Paid so far</span>
+          <span>{formatCurrency(toNumber(invoice.amountPaid))}</span>
+        </div>
+        <div className="flex justify-between text-sm font-medium">
+          <span>Outstanding</span>
+          <span>{formatCurrency(toNumber(invoice.outstandingBalance))}</span>
+        </div>
+      </div>
+
       <div className="mx-auto mb-4 max-w-md">
-        <InvoiceStatusToggles invoiceId={invoice.id} paid={!!invoice.paidAt} sent={!!invoice.sentAt} />
+        <InvoiceStatusToggles invoiceId={invoice.id} sent={!!invoice.sentAt} />
       </div>
 
       <div id="invoice-print-area" className="mb-4">

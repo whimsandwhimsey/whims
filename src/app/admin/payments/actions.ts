@@ -6,8 +6,8 @@ import { prisma } from '@/lib/prisma';
 import { requireStaffSession } from '@/lib/guards';
 import { writeAuditLog } from '@/lib/audit';
 import { getCustomerDepositBalance, recalculateDepositLedger } from '@/lib/deposit';
-import { computePaymentStatus, computeOutstandingBalance, toNumber } from '@/lib/calculations';
-import { recalculateOrderFinancials } from '@/lib/order-recalc';
+import { toNumber } from '@/lib/calculations';
+import { recalculateInvoiceFinancials } from '@/lib/invoice-calculations';
 
 export type ActionResult = { success: true } | { success: false; error: string };
 
@@ -19,13 +19,15 @@ const paymentFormSchema = z.object({
 });
 
 /**
- * Records a payment against a specific order. Only the amount needed to
- * cover the order's outstanding balance is applied to the order — any
- * excess automatically becomes a customer deposit (TOP_UP transaction).
- * The actual math is delegated to recalculateOrderFinancials so creating,
+ * Records a payment against a specific invoice — never directly against an
+ * order, since an order can have several invoices (DP, final payment, plus
+ * any invoice for items merged in later) and money needs to go to the right
+ * one. Only the amount needed to cover that invoice's outstanding balance
+ * is applied to it; any excess automatically becomes a customer deposit.
+ * The actual math is delegated to recalculateInvoiceFinancials so creating,
  * editing, and deleting a payment all go through the exact same logic.
  */
-export async function recordPayment(orderId: string, formData: FormData): Promise<ActionResult> {
+export async function recordPayment(invoiceId: string, formData: FormData): Promise<ActionResult> {
   const session = await requireStaffSession();
   const parsed = paymentFormSchema.safeParse({
     amount: formData.get('amount'),
@@ -40,13 +42,14 @@ export async function recordPayment(orderId: string, formData: FormData): Promis
   const data = parsed.data;
 
   try {
-    const order = await prisma.order.findUnique({ where: { id: orderId } });
-    if (!order) return { success: false, error: 'Order not found.' };
+    const invoice = await prisma.invoice.findUnique({ where: { id: invoiceId }, include: { order: true } });
+    if (!invoice) return { success: false, error: 'Invoice not found.' };
 
     const payment = await prisma.payment.create({
       data: {
-        customerId: order.customerId,
-        orderId,
+        customerId: invoice.order.customerId,
+        orderId: invoice.orderId,
+        invoiceId,
         date: new Date(data.date),
         amount: data.amount,
         method: data.method,
@@ -55,18 +58,20 @@ export async function recordPayment(orderId: string, formData: FormData): Promis
       },
     });
 
-    await recalculateOrderFinancials(orderId);
+    await recalculateInvoiceFinancials(invoiceId);
 
     await writeAuditLog({
       userId: session.user.id,
       action: 'CREATE',
       entityType: 'Payment',
       entityId: payment.id,
-      summary: `Recorded ${data.method} payment of ${data.amount} for order ${order.orderNumber}`,
+      summary: `Recorded ${data.method} payment of ${data.amount} for invoice ${invoice.invoiceNumber}`,
     });
 
-    revalidatePath(`/admin/orders/${orderId}`);
+    revalidatePath(`/admin/orders/${invoice.orderId}`);
+    revalidatePath(`/admin/invoices/${invoiceId}`);
     revalidatePath('/admin/orders');
+    revalidatePath('/admin/invoices');
     revalidatePath('/admin/payments');
     return { success: true };
   } catch (err) {
@@ -75,7 +80,7 @@ export async function recordPayment(orderId: string, formData: FormData): Promis
   }
 }
 
-/** Records a payment that isn't tied to any order — the whole amount becomes a deposit. */
+/** Records a payment that isn't tied to any invoice — the whole amount becomes a deposit. */
 export async function recordDepositTopUp(customerId: string, formData: FormData): Promise<ActionResult> {
   const session = await requireStaffSession();
   const parsed = paymentFormSchema.safeParse({
@@ -95,6 +100,7 @@ export async function recordDepositTopUp(customerId: string, formData: FormData)
       data: {
         customerId,
         orderId: null,
+        invoiceId: null,
         date: new Date(data.date),
         amount: data.amount,
         method: data.method,
@@ -111,8 +117,7 @@ export async function recordDepositTopUp(customerId: string, formData: FormData)
         type: 'TOP_UP',
         amount: data.amount,
         balanceAfter: newBalance,
-        paymentId: payment.id,
-        notes: data.notes || 'Deposit top-up',
+        notes: `Deposit top-up (payment:${payment.id})`,
         createdById: session.user.id,
       },
     });
@@ -142,11 +147,10 @@ const editPaymentSchema = z.object({
 });
 
 /**
- * Edits a previously recorded payment. Works for both order-linked payments
- * and standalone deposit top-ups — in both cases the linked deposit
- * transaction (if any) and all downstream balances are recalculated from
- * scratch afterwards, so the edit is always reflected correctly no matter
- * how much history has happened since.
+ * Edits a previously recorded payment. Works for both invoice-linked
+ * payments and standalone deposit top-ups — in both cases the linked
+ * deposit transaction (if any) and all downstream balances are
+ * recalculated from scratch afterwards.
  */
 export async function editPayment(paymentId: string, formData: FormData): Promise<ActionResult> {
   const session = await requireStaffSession();
@@ -176,17 +180,16 @@ export async function editPayment(paymentId: string, formData: FormData): Promis
       },
     });
 
-    if (before.orderId) {
-      await recalculateOrderFinancials(before.orderId);
+    if (before.invoiceId) {
+      await recalculateInvoiceFinancials(before.invoiceId);
     } else {
-      // Standalone deposit top-up: update its own TOP_UP transaction directly.
       const topUp = await prisma.depositTransaction.findFirst({
-        where: { paymentId: before.id, type: 'TOP_UP' },
+        where: { customerId: before.customerId, type: 'TOP_UP', notes: { contains: `payment:${before.id}` } },
       });
       if (topUp) {
         await prisma.depositTransaction.update({
           where: { id: topUp.id },
-          data: { amount: data.amount, notes: data.notes || topUp.notes },
+          data: { amount: data.amount },
         });
         await recalculateDepositLedger(before.customerId);
       }
@@ -202,6 +205,7 @@ export async function editPayment(paymentId: string, formData: FormData): Promis
     });
 
     revalidatePath('/admin/payments');
+    if (before.invoiceId) revalidatePath(`/admin/invoices/${before.invoiceId}`);
     if (before.orderId) revalidatePath(`/admin/orders/${before.orderId}`);
     revalidatePath(`/admin/customers/${before.customerId}`);
     return { success: true };
@@ -218,17 +222,14 @@ export async function deletePayment(paymentId: string): Promise<ActionResult> {
     const payment = await prisma.payment.findUnique({ where: { id: paymentId } });
     if (!payment) return { success: false, error: 'Payment not found.' };
 
-    // Detach (rather than cascade-delete) any deposit transaction this
-    // payment generated, so the deposit ledger history stays intact — the
-    // recalculation below will then correct or remove it as appropriate.
     const linkedTopUp = await prisma.depositTransaction.findFirst({
-      where: { paymentId, type: 'TOP_UP' },
+      where: { customerId: payment.customerId, type: 'TOP_UP', notes: { contains: `payment:${payment.id}` } },
     });
 
     await prisma.payment.delete({ where: { id: paymentId } });
 
-    if (payment.orderId) {
-      await recalculateOrderFinancials(payment.orderId);
+    if (payment.invoiceId) {
+      await recalculateInvoiceFinancials(payment.invoiceId);
     } else if (linkedTopUp) {
       await prisma.depositTransaction.delete({ where: { id: linkedTopUp.id } });
       await recalculateDepositLedger(payment.customerId);
@@ -243,6 +244,7 @@ export async function deletePayment(paymentId: string): Promise<ActionResult> {
     });
 
     revalidatePath('/admin/payments');
+    if (payment.invoiceId) revalidatePath(`/admin/invoices/${payment.invoiceId}`);
     if (payment.orderId) revalidatePath(`/admin/orders/${payment.orderId}`);
     revalidatePath(`/admin/customers/${payment.customerId}`);
     return { success: true };
@@ -254,7 +256,8 @@ export async function deletePayment(paymentId: string): Promise<ActionResult> {
 
 const applyDepositSchema = z.object({ amount: z.coerce.number().positive('Amount must be greater than zero') });
 
-export async function applyDepositToOrder(orderId: string, formData: FormData): Promise<ActionResult> {
+/** Applies part (or all) of a customer's deposit balance to a specific invoice. */
+export async function applyDepositToInvoice(invoiceId: string, formData: FormData): Promise<ActionResult> {
   const session = await requireStaffSession();
   const parsed = applyDepositSchema.safeParse({ amount: formData.get('amount') });
   if (!parsed.success) return { success: false, error: 'Invalid amount.' };
@@ -262,34 +265,25 @@ export async function applyDepositToOrder(orderId: string, formData: FormData): 
 
   try {
     await prisma.$transaction(async (tx) => {
-      const order = await tx.order.findUnique({ where: { id: orderId } });
-      if (!order) throw new Error('Order not found.');
+      const invoice = await tx.invoice.findUnique({ where: { id: invoiceId }, include: { order: true } });
+      if (!invoice) throw new Error('Invoice not found.');
 
-      const depositBalance = await getCustomerDepositBalance(order.customerId);
-      const outstanding = toNumber(order.outstandingBalance);
+      const depositBalance = await getCustomerDepositBalance(invoice.order.customerId);
+      const outstanding = toNumber(invoice.outstandingBalance);
 
       if (amount > depositBalance) throw new Error("Amount exceeds the customer's deposit balance.");
-      if (amount > outstanding) throw new Error("Amount exceeds this order's outstanding balance.");
-
-      const newAmountPaid = toNumber(order.amountPaid) + amount;
-      const totalAmount = toNumber(order.totalAmount);
-      const newOutstanding = computeOutstandingBalance(totalAmount, newAmountPaid);
-      const newStatus = computePaymentStatus(totalAmount, newAmountPaid);
-
-      await tx.order.update({
-        where: { id: orderId },
-        data: { amountPaid: newAmountPaid, outstandingBalance: newOutstanding, paymentStatus: newStatus },
-      });
+      if (amount > outstanding) throw new Error("Amount exceeds this invoice's outstanding balance.");
 
       const newBalance = depositBalance - amount;
       await tx.depositTransaction.create({
         data: {
-          customerId: order.customerId,
+          customerId: invoice.order.customerId,
           type: 'USED',
           amount,
           balanceAfter: newBalance,
-          orderId,
-          notes: `Applied to order ${order.orderNumber}`,
+          orderId: invoice.orderId,
+          invoiceId,
+          notes: `Applied to invoice ${invoice.invoiceNumber}`,
           createdById: session.user.id,
         },
       });
@@ -297,13 +291,17 @@ export async function applyDepositToOrder(orderId: string, formData: FormData): 
       await writeAuditLog({
         userId: session.user.id,
         action: 'UPDATE',
-        entityType: 'Order',
-        entityId: orderId,
-        summary: `Applied ${amount} deposit to order ${order.orderNumber}`,
+        entityType: 'Invoice',
+        entityId: invoiceId,
+        summary: `Applied ${amount} deposit to invoice ${invoice.invoiceNumber}`,
       });
     });
 
-    revalidatePath(`/admin/orders/${orderId}`);
+    await recalculateInvoiceFinancials(invoiceId);
+
+    const invoice = await prisma.invoice.findUnique({ where: { id: invoiceId } });
+    revalidatePath(`/admin/invoices/${invoiceId}`);
+    if (invoice) revalidatePath(`/admin/orders/${invoice.orderId}`);
     revalidatePath('/admin/orders');
     revalidatePath('/admin/payments');
     return { success: true };

@@ -19,4 +19,3 @@ export function Logo({ className, priority }: { className?: string; priority?: b
     />
   );
 }
-    

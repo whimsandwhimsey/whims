@@ -15,10 +15,12 @@ import { deleteOrder } from './actions';
 const PAGE_SIZE = 15;
 
 const STATUS_LABELS: Record<string, string> = {
-  WAITING: 'Waiting',
-  ARRIVED: 'Arrived',
+  WAITING: 'Open',
+  IN_TRANSIT: 'Dalam perjalanan',
+  ARRIVED_COUNTRY: 'Tiba di Indonesia',
+  ARRIVED: 'Tiba di gudang',
   READY_TO_SHIP: 'Ready to Ship',
-  SHIPPED: 'Shipped',
+  SHIPPED: 'Terkirim',
   COMPLETED: 'Completed',
   CANCELLED: 'Cancelled',
 };
@@ -171,7 +173,50 @@ export default async function OrdersPage({
       </div>
 
       <Card className="overflow-hidden">
-        <div className="overflow-x-auto">
+        {/* Mobile: compact cards, no horizontal scroll */}
+        <div className="divide-y divide-border md:hidden">
+          {orders.map((o) => (
+            <Link
+              key={o.id}
+              href={`/admin/orders/${o.id}`}
+              className="block p-4 hover:bg-secondary/50"
+            >
+              <div className="mb-1 flex items-start justify-between gap-2">
+                <div>
+                  <p className="text-sm font-medium">{o.customer.name}</p>
+                  <p className="text-xs text-muted-foreground">{o.orderNumber}</p>
+                </div>
+                <p className="text-sm font-medium">{formatCurrency(o.totalAmount.toString())}</p>
+              </div>
+              <div className="mb-1.5 flex flex-wrap gap-1.5">
+                <span className="inline-flex items-center rounded-full bg-accent px-2 py-0.5 text-[10px] font-medium text-accent-foreground">
+                  {orderTypeLabels[o.orderType] ?? o.orderType}
+                </span>
+                {o.supplier && (
+                  <span className="inline-flex items-center rounded-full bg-secondary px-2 py-0.5 text-[10px] font-medium text-secondary-foreground">
+                    {o.supplier.name}
+                  </span>
+                )}
+                {o.poMonth && (
+                  <span className="inline-flex items-center rounded-full bg-secondary px-2 py-0.5 text-[10px] font-medium text-secondary-foreground">
+                    PO {o.poMonth}
+                    {o.etaMonth ? ` · ETA ${o.etaMonth}` : ''}
+                  </span>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                <PaymentStatusBadge status={o.paymentStatus} />
+                <OrderStatusBadge status={o.status} />
+              </div>
+            </Link>
+          ))}
+          {orders.length === 0 && (
+            <p className="px-4 py-10 text-center text-sm text-muted-foreground">No orders found.</p>
+          )}
+        </div>
+
+        {/* Desktop: full table */}
+        <div className="hidden overflow-x-auto md:block">
           <table className="w-full text-sm">
             <thead className="bg-secondary text-left text-xs uppercase tracking-wide text-muted-foreground">
               <tr>

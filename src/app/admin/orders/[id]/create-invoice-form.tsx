@@ -6,85 +6,62 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
-import { formatCurrency } from '@/lib/utils';
 import { createInvoice } from '../../invoices/actions';
 
 type InvoiceType = 'DEPOSIT' | 'FINAL_PAYMENT' | 'READY_STOCK';
-type PoBatchType = 'FAST' | 'REGULAR' | 'READY_STOCK';
+type DpType = 'PERCENTAGE' | 'FIXED_PER_BOOK' | 'FIXED_TOTAL' | null;
 
-function computeFinalPaymentAmount(outstandingBalance: number, depositBalance: number): number {
-  // If the customer topped up deposit at some point between DP and settlement,
-  // the Final Payment invoice should ask for less — the deposit covers part of it.
-  return Math.max(0, Math.round((outstandingBalance - depositBalance) * 100) / 100);
-}
+const PO_TYPES = ['PO_REGULAR', 'PO_REMAINDER'];
 
-function computeSmartDefaults(
-  poBatchType: PoBatchType | undefined,
-  totalQuantity: number,
-  amountPaid: number,
-  totalAmount: number,
-  outstandingBalance: number,
-  depositBalance: number
-): { type: InvoiceType; amount: number } {
-  if (poBatchType === 'FAST') {
-    return { type: 'DEPOSIT', amount: Math.round(totalAmount * 0.5) };
-  }
-  if (poBatchType === 'REGULAR') {
-    return { type: 'DEPOSIT', amount: totalQuantity * 50000 };
-  }
-  if (poBatchType === 'READY_STOCK') {
-    return { type: 'READY_STOCK', amount: totalAmount };
-  }
-  // No PO batch assigned — fall back to the original generic defaults.
-  return { type: 'DEPOSIT', amount: amountPaid || outstandingBalance || totalAmount };
+function computeDpAmount(dpType: DpType, dpValue: number | null, totalAmount: number, totalQuantity: number): number {
+  if (!dpType || dpValue === null) return Math.round(totalAmount * 0.25);
+  if (dpType === 'PERCENTAGE') return Math.round(totalAmount * (dpValue / 100));
+  if (dpType === 'FIXED_PER_BOOK') return Math.round(dpValue * totalQuantity);
+  return Math.round(Math.min(dpValue, totalAmount));
 }
 
 export function CreateInvoiceForm({
   orderId,
-  amountPaid,
+  orderType,
   totalAmount,
-  outstandingBalance,
-  depositBalance = 0,
-  poBatchType,
   totalQuantity,
+  dpType,
+  dpValue,
+  alreadyInvoiced,
 }: {
   orderId: string;
-  amountPaid: number;
+  orderType: string;
   totalAmount: number;
-  outstandingBalance: number;
-  depositBalance?: number;
-  poBatchType?: PoBatchType;
   totalQuantity: number;
+  dpType: DpType;
+  dpValue: number | null;
+  alreadyInvoiced: number;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
 
-  const initialDefaults = computeSmartDefaults(
-    poBatchType,
-    totalQuantity,
-    amountPaid,
-    totalAmount,
-    outstandingBalance,
-    depositBalance
-  );
-  const [type, setType] = useState<InvoiceType>(initialDefaults.type);
-  const [amount, setAmount] = useState(String(initialDefaults.amount));
+  const isPoType = PO_TYPES.includes(orderType);
+  const remainingToInvoice = Math.max(0, Math.round(totalAmount - alreadyInvoiced));
+
+  const initialType: InvoiceType = !isPoType ? 'READY_STOCK' : alreadyInvoiced === 0 ? 'DEPOSIT' : 'FINAL_PAYMENT';
+  const initialAmount = !isPoType
+    ? remainingToInvoice
+    : alreadyInvoiced === 0
+      ? computeDpAmount(dpType, dpValue, totalAmount, totalQuantity)
+      : remainingToInvoice;
+
+  const [type, setType] = useState<InvoiceType>(initialType);
+  const [amount, setAmount] = useState(String(initialAmount));
 
   function handleTypeChange(next: InvoiceType) {
     setType(next);
-    const defaults: Record<InvoiceType, number> = {
-      DEPOSIT:
-        poBatchType === 'REGULAR'
-          ? totalQuantity * 50000
-          : poBatchType === 'FAST'
-            ? Math.round(totalAmount * 0.5)
-            : amountPaid,
-      FINAL_PAYMENT: computeFinalPaymentAmount(outstandingBalance || totalAmount, depositBalance),
-      READY_STOCK: totalAmount,
-    };
-    setAmount(String(defaults[next] || totalAmount));
+    if (next === 'DEPOSIT') {
+      setAmount(String(computeDpAmount(dpType, dpValue, totalAmount, totalQuantity)));
+    } else {
+      setAmount(String(remainingToInvoice));
+    }
   }
 
   function handleSubmit(e: React.FormEvent) {
@@ -110,15 +87,9 @@ export function CreateInvoiceForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-3 rounded-md border border-border p-4">
-      {poBatchType && (
+      {isPoType && type === 'DEPOSIT' && (
         <p className="text-xs text-brass">
-          Amount prefilled from this order&apos;s PO batch rule — feel free to adjust.
-        </p>
-      )}
-      {type === 'FINAL_PAYMENT' && depositBalance > 0 && (
-        <p className="text-xs text-brass">
-          Customer has {formatCurrency(depositBalance)} in deposit — already subtracted from the
-          amount below. Consider applying it via &quot;Apply deposit&quot; on this order too.
+          Amount prefilled from this order&apos;s DP rule ({dpType ? dpType.toLowerCase().replace('_', ' ') : 'default 25%'}) — feel free to adjust.
         </p>
       )}
       <div className="grid gap-3 sm:grid-cols-2">
@@ -129,9 +100,9 @@ export function CreateInvoiceForm({
             value={type}
             onChange={(e) => handleTypeChange(e.target.value as InvoiceType)}
           >
-            <option value="DEPOSIT">Deposit</option>
-            <option value="FINAL_PAYMENT">Final Payment (Pelunasan)</option>
-            <option value="READY_STOCK">Ready Stock</option>
+            {isPoType && <option value="DEPOSIT">Deposit (DP)</option>}
+            {isPoType && <option value="FINAL_PAYMENT">Final Payment (Pelunasan)</option>}
+            {!isPoType && <option value="READY_STOCK">Full payment</option>}
           </Select>
         </div>
         <div className="space-y-1.5">

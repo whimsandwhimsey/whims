@@ -8,28 +8,28 @@ import { formatDate } from '@/lib/utils';
 export default async function PackingListPage() {
   const orders = await prisma.order.findMany({
     where: {
-      status: { notIn: ['COMPLETED', 'CANCELLED'] },
-      payments: { some: {} },
+      status: { in: ['ARRIVED', 'READY_TO_SHIP'] },
+      paymentStatus: { in: ['PAID', 'OVERPAID'] },
     },
     include: {
       customer: true,
       items: true,
-      payments: { orderBy: { date: 'asc' }, take: 1 },
+      payments: { orderBy: { date: 'desc' }, take: 1 },
     },
   });
 
-  // Sort by the earliest payment date for each order — first paid, first packed.
+  // Sort by whichever order got fully paid first — first paid, first packed.
   const sorted = orders
-    .map((o) => ({ order: o, firstPaymentDate: o.payments[0]?.date ?? o.orderDate }))
-    .sort((a, b) => a.firstPaymentDate.getTime() - b.firstPaymentDate.getTime());
+    .map((o) => ({ order: o, paidDate: o.payments[0]?.date ?? o.orderDate }))
+    .sort((a, b) => a.paidDate.getTime() - b.paidDate.getTime());
 
   return (
     <div className="p-4 sm:p-6">
       <div className="mb-6">
         <h1 className="font-display text-2xl font-semibold text-primary">Packing List</h1>
         <p className="text-sm text-muted-foreground">
-          {sorted.length} order(s) to pack, in the order their payments came in — work top to bottom
-          so nothing gets skipped.
+          {sorted.length} order(s) ready to pack — fully paid and arrived at the warehouse, in the
+          order they got paid off. Work top to bottom so nothing gets skipped.
         </p>
       </div>
 
@@ -75,7 +75,8 @@ export default async function PackingListPage() {
 
         {sorted.length === 0 && (
           <CardContent className="py-10 text-center text-sm text-muted-foreground">
-            Nothing to pack right now — orders show up here once a payment has been recorded.
+            Nothing to pack right now — orders show up here once fully paid and marked as arrived
+            at the warehouse.
           </CardContent>
         )}
       </div>

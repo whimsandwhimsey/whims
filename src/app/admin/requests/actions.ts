@@ -36,8 +36,7 @@ export async function confirmTopUpRequest(id: string) {
         type: 'TOP_UP',
         amount,
         balanceAfter: newBalance,
-        paymentId: payment.id,
-        notes: 'Confirmed self-service top-up request',
+        notes: `Confirmed self-service top-up request (payment:${payment.id})`,
         createdById: session.user.id,
       },
     });

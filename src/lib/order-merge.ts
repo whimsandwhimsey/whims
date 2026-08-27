@@ -40,7 +40,7 @@ export async function findMergeableOrder(tx: Prisma.TransactionClient, key: Merg
       orderType: key.orderType as any,
       poMonth: key.poMonth,
       supplierId: key.supplierId,
-      status: { in: MERGEABLE_STATUSES as any[] },
+      status: { in: MERGEABLE_STATUSES as any },
     },
     orderBy: { createdAt: 'desc' },
   });

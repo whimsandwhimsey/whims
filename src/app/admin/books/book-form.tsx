@@ -60,9 +60,19 @@ export function BookForm({
       const sourceLabel = data.source === 'openlibrary' ? 'Open Library' : 'Google Books';
 
       if (data.publisher) {
-        const match = publisherOptions.find(
-          (p) => p.label.toLowerCase() === data.publisher.toLowerCase()
-        );
+        const normalize = (s: string) =>
+          s
+            .toLowerCase()
+            .replace(/[.,]/g, '')
+            .replace(/\b(publishing|publishers?|books?|press|group|ltd|inc|co|corp|corporation|company|llc)\b/g, '')
+            .replace(/\s+/g, ' ')
+            .trim();
+
+        const target = normalize(data.publisher);
+        const match = publisherOptions.find((p) => {
+          const candidate = normalize(p.label);
+          return candidate === target || candidate.includes(target) || target.includes(candidate);
+        });
         if (match) {
           setPublisherId(match.value);
           setLookupNote(`Judul, author, dan publisher ke-isi otomatis dari ${sourceLabel}. Berat tetap perlu diisi manual (timbang fisik bukunya).`);

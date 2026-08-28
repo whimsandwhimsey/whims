@@ -56,10 +56,9 @@ async function main() {
   });
 
   // ── Sample customer ──
-  const customer = await prisma.customer.upsert({
-    where: { phone: '6281234567890' },
-    update: {},
-    create: {
+  const existingCustomer = await prisma.customer.findFirst({ where: { phone: '6281234567890' } });
+  const customer = existingCustomer ?? await prisma.customer.create({
+    data: {
       name: 'Siti Rahayu',
       phone: '6281234567890',
       address: 'Jl. Kenanga No. 12, Jakarta Selatan',
@@ -69,16 +68,17 @@ async function main() {
   });
 
   // ── Sample pending signup (so the admin approval banner has something to show) ──
-  await prisma.customer.upsert({
-    where: { phone: '6281298765432' },
-    update: {},
-    create: {
-      name: 'Budi Santoso',
-      phone: '6281298765432',
-      address: 'Jl. Melati No. 5, Bandung',
-      status: 'PENDING',
-    },
-  });
+  const existingPending = await prisma.customer.findFirst({ where: { phone: '6281298765432' } });
+  if (!existingPending) {
+    await prisma.customer.create({
+      data: {
+        name: 'Budi Santoso',
+        phone: '6281298765432',
+        address: 'Jl. Melati No. 5, Bandung',
+        status: 'PENDING',
+      },
+    });
+  }
 
   // ── Sample order with items ──
   const existingOrder = await prisma.order.findUnique({ where: { orderNumber: 'ORD-2026-000001' } });

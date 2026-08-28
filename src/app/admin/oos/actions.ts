@@ -13,7 +13,7 @@ export async function findOosCandidates(bookId: string) {
     where: {
       bookId,
       isOos: false,
-      order: { status: { in: OPEN_STATUSES } },
+      order: { status: { in: OPEN_STATUSES as any } },
     },
     include: {
       order: { include: { customer: true } },

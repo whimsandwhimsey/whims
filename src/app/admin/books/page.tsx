@@ -72,6 +72,7 @@ export default async function BooksPage({
           <table className="w-full text-sm">
             <thead className="bg-secondary text-left text-xs uppercase tracking-wide text-muted-foreground">
               <tr>
+                <th className="px-2 py-3 font-medium"></th>
                 <th className="px-4 py-3 font-medium">Title</th>
                 <th className="px-4 py-3 font-medium">Author</th>
                 <th className="px-4 py-3 font-medium">Publisher</th>
@@ -84,6 +85,14 @@ export default async function BooksPage({
             <tbody className="divide-y divide-border">
               {books.map((b) => (
                 <tr key={b.id} className="hover:bg-secondary/50">
+                  <td className="px-2 py-3">
+                    {b.imageUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={b.imageUrl} alt="" className="h-12 w-8 rounded object-cover" />
+                    ) : (
+                      <div className="h-12 w-8 rounded bg-secondary" />
+                    )}
+                  </td>
                   <td className="px-4 py-3 font-medium">{b.title}</td>
                   <td className="px-4 py-3 text-muted-foreground">{b.author || '—'}</td>
                   <td className="px-4 py-3 text-muted-foreground">{b.publisher?.name || '—'}</td>
@@ -122,7 +131,7 @@ export default async function BooksPage({
               ))}
               {books.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-4 py-10 text-center text-muted-foreground">
+                  <td colSpan={8} className="px-4 py-10 text-center text-muted-foreground">
                     No books found.
                   </td>
                 </tr>

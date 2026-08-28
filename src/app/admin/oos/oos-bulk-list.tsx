@@ -10,7 +10,17 @@ import { formatCurrency } from '@/lib/utils';
 import { bulkMarkOos } from './actions';
 import { resolveItemOos } from '../orders/[id]/oos-actions';
 
-export function MarkAllCard({ bookId, bookTitle, count }: { bookId: string; bookTitle: string; count: number }) {
+export function MarkAllCard({
+  bookId,
+  batchId,
+  bookTitle,
+  count,
+}: {
+  bookId: string;
+  batchId: string;
+  bookTitle: string;
+  count: number;
+}) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -18,14 +28,14 @@ export function MarkAllCard({ bookId, bookTitle, count }: { bookId: string; book
     <Card className="border-amber-300 bg-amber-50">
       <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm">
-          <strong>{count} order</strong> belum diproses untuk &quot;{bookTitle}&quot;.
+          <strong>{count} order</strong> di batch ini belum diproses untuk &quot;{bookTitle}&quot;.
         </p>
         <Button
           type="button"
           disabled={isPending}
           onClick={() =>
             startTransition(async () => {
-              const res = await fetch(`/api/oos/candidates?bookId=${bookId}`);
+              const res = await fetch(`/api/oos/candidates?bookId=${bookId}&batchId=${batchId}`);
               const data = await res.json();
               const ids: string[] = data.ids ?? [];
               if (ids.length > 0) {

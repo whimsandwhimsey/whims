@@ -29,6 +29,7 @@ type Book = {
   title: string;
   isbn: string | null;
   format: string | null;
+  imageUrl: string | null;
 };
 type Supplier = { id: string; name: string };
 type OpenBatch = {
@@ -46,6 +47,7 @@ type ItemRow = {
   bookTitle: string;
   isbn: string;
   format: string;
+  imageUrl: string;
   quantity: number;
   sellingPrice: number;
   cogs: number;
@@ -155,6 +157,7 @@ export function OrderForm({
           bookTitle: it.bookTitle,
           isbn: it.isbn ?? '',
           format: it.format ?? '',
+          imageUrl: '',
           quantity: it.quantity,
           sellingPrice: toNumber(it.sellingPrice as any),
           cogs: toNumber(it.cogs as any),
@@ -167,6 +170,7 @@ export function OrderForm({
             bookTitle: '',
             isbn: '',
             format: '',
+            imageUrl: '',
             quantity: 1,
             sellingPrice: 0,
             cogs: 0,
@@ -267,6 +271,7 @@ export function OrderForm({
         bookTitle: '',
         isbn: '',
         format: '',
+        imageUrl: '',
         quantity: 1,
         sellingPrice: 0,
         cogs: 0,
@@ -293,6 +298,7 @@ export function OrderForm({
       bookTitle: book.title,
       isbn: book.isbn ?? '',
       format: book.format ?? '',
+      imageUrl: book.imageUrl ?? '',
     });
   }
 
@@ -611,7 +617,16 @@ export function OrderForm({
             const subtotal = computeItemSubtotal(row);
             return (
               <div key={row.key} className="rounded-md border border-border p-4">
-                <div className="mb-3 grid gap-3 sm:grid-cols-2">
+                <div className="mb-3 flex gap-3">
+                  {row.imageUrl && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={row.imageUrl}
+                      alt=""
+                      className="h-16 w-11 shrink-0 rounded object-cover"
+                    />
+                  )}
+                  <div className="grid flex-1 gap-3 sm:grid-cols-2">
                   <div className="space-y-1.5">
                     <Label>Book from catalog (optional)</Label>
                     <SearchableSelect
@@ -634,6 +649,7 @@ export function OrderForm({
                       onChange={(e) => updateItem(row.key, { bookTitle: e.target.value })}
                       required
                     />
+                  </div>
                   </div>
                 </div>
 

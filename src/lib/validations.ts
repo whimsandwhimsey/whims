@@ -36,6 +36,8 @@ export const bookSchema = z.object({
   author: z.string().max(200).optional().or(z.literal('')),
   isbn: z.string().max(30).optional().or(z.literal('')),
   format: z.enum(bookFormatValues).optional().or(z.literal('')),
+  weightGrams: z.coerce.number().int().min(0).optional().or(z.literal('')),
+  imageUrl: z.string().max(1000).optional().or(z.literal('')),
   publisherId: z.string().optional().or(z.literal('')),
   notes: z.string().max(1000).optional().or(z.literal('')),
 });

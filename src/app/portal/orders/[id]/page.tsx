@@ -28,7 +28,7 @@ export default async function PortalOrderDetailPage({ params }: { params: { id: 
   const order = await prisma.order.findUnique({
     where: { id: params.id },
     include: {
-      items: true,
+      items: { include: { book: true } },
       payments: { orderBy: { date: 'desc' } },
       invoices: { orderBy: { issuedAt: 'desc' } },
     },
@@ -76,12 +76,22 @@ export default async function PortalOrderDetailPage({ params }: { params: { id: 
                   {order.items.map((item) => (
                     <tr key={item.id}>
                       <td className="px-4 py-2">
-                        <p>{item.bookTitle}</p>
-                        {(item.isbn || item.format) && (
-                          <p className="text-xs text-muted-foreground">
-                            {[item.format ? bookFormatLabels[item.format] ?? item.format : null, item.isbn].filter(Boolean).join(' · ')}
-                          </p>
-                        )}
+                        <div className="flex items-center gap-2">
+                          {item.book?.imageUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={item.book.imageUrl} alt="" className="h-12 w-8 shrink-0 rounded object-cover" />
+                          ) : (
+                            <div className="h-12 w-8 shrink-0 rounded bg-secondary" />
+                          )}
+                          <div>
+                            <p>{item.bookTitle}</p>
+                            {(item.isbn || item.format) && (
+                              <p className="text-xs text-muted-foreground">
+                                {[item.format ? bookFormatLabels[item.format] ?? item.format : null, item.isbn].filter(Boolean).join(' · ')}
+                              </p>
+                            )}
+                          </div>
+                        </div>
                       </td>
                       <td className="px-4 py-2 text-right">{item.quantity}</td>
                       <td className="px-4 py-2 text-right">{formatCurrency(item.sellingPrice.toString())}</td>

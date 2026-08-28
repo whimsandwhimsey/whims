@@ -14,6 +14,8 @@ function parseBookForm(formData: FormData) {
     author: formData.get('author') ?? '',
     isbn: formData.get('isbn') ?? '',
     format: formData.get('format') || undefined,
+    weightGrams: formData.get('weightGrams') || '',
+    imageUrl: formData.get('imageUrl') ?? '',
     publisherId: formData.get('publisherId') ?? '',
     notes: formData.get('notes') ?? '',
   });
@@ -39,6 +41,8 @@ export async function createBook(_prevState: FormState, formData: FormData): Pro
       isbn: parsed.data.isbn || null,
       author: parsed.data.author || null,
       format: parsed.data.format || null,
+      weightGrams: parsed.data.weightGrams === '' || parsed.data.weightGrams === undefined ? null : parsed.data.weightGrams,
+      imageUrl: parsed.data.imageUrl || null,
       publisherId: parsed.data.publisherId || null,
     },
   });
@@ -81,6 +85,8 @@ export async function updateBook(
       isbn: parsed.data.isbn || null,
       author: parsed.data.author || null,
       format: parsed.data.format || null,
+      weightGrams: parsed.data.weightGrams === '' || parsed.data.weightGrams === undefined ? null : parsed.data.weightGrams,
+      imageUrl: parsed.data.imageUrl || null,
       publisherId: parsed.data.publisherId || null,
     },
   });

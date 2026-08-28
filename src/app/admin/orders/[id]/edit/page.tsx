@@ -14,7 +14,7 @@ export default async function EditOrderPage({ params }: { params: { id: string }
     prisma.book.findMany({
       where: { isActive: true },
       orderBy: { title: 'asc' },
-      select: { id: true, title: true, isbn: true, format: true },
+      select: { id: true, title: true, isbn: true, format: true, imageUrl: true },
     }),
     prisma.supplier.findMany({ where: { isActive: true }, orderBy: { name: 'asc' }, select: { id: true, name: true } }),
     prisma.purchaseBatch.findMany({

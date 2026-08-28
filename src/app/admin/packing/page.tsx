@@ -13,7 +13,7 @@ export default async function PackingListPage() {
     },
     include: {
       customer: true,
-      items: true,
+      items: { include: { book: true } },
       payments: { orderBy: { date: 'desc' }, take: 1 },
     },
   });
@@ -51,9 +51,15 @@ export default async function PackingListPage() {
               <OrderStatusBadge status={order.status} />
             </div>
 
-            <ul className="mb-3 space-y-0.5 text-sm text-muted-foreground">
+            <ul className="mb-3 space-y-1.5">
               {order.items.map((item) => (
-                <li key={item.id}>
+                <li key={item.id} className="flex items-center gap-2 text-sm text-muted-foreground">
+                  {item.book?.imageUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={item.book.imageUrl} alt="" className="h-8 w-6 shrink-0 rounded object-cover" />
+                  ) : (
+                    <div className="h-8 w-6 shrink-0 rounded bg-secondary" />
+                  )}
                   {item.bookTitle} × {item.quantity}
                 </li>
               ))}

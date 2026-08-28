@@ -9,8 +9,9 @@ export async function GET(request: NextRequest) {
   }
 
   const bookId = request.nextUrl.searchParams.get('bookId');
+  const batchId = request.nextUrl.searchParams.get('batchId') ?? undefined;
   if (!bookId) return NextResponse.json({ ids: [] });
 
-  const items = await findOosCandidates(bookId);
+  const items = await findOosCandidates(bookId, batchId);
   return NextResponse.json({ ids: items.map((i) => i.id) });
 }

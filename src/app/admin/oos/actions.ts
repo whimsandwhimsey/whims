@@ -7,13 +7,19 @@ import { writeAuditLog } from '@/lib/audit';
 
 const OPEN_STATUSES = ['WAITING', 'IN_TRANSIT', 'ARRIVED_COUNTRY', 'ARRIVED'];
 
-/** Finds every not-yet-fulfilled, not-yet-OOS order item for a book. */
-export async function findOosCandidates(bookId: string) {
+/** Finds every not-yet-fulfilled, not-yet-OOS order item for a book,
+ * optionally scoped to one PO batch (the same book can ship fine in one
+ * batch and come up short in another — batchId "__none__" means orders
+ * with no PO batch at all). */
+export async function findOosCandidates(bookId: string, batchId?: string) {
   const items = await prisma.orderItem.findMany({
     where: {
       bookId,
       isOos: false,
-      order: { status: { in: OPEN_STATUSES as any } },
+      order: {
+        status: { in: OPEN_STATUSES as any },
+        ...(batchId ? { poBatchId: batchId === '__none__' ? null : batchId } : {}),
+      },
     },
     include: {
       order: { include: { customer: true } },

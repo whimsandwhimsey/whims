@@ -77,7 +77,7 @@ export default async function OrdersPage({
       orderBy: { orderDate: 'desc' },
       skip: (page - 1) * PAGE_SIZE,
       take: PAGE_SIZE,
-      include: { customer: true, poBatch: { select: { id: true, name: true } }, supplier: true },
+      include: { customer: true, poBatch: { select: { id: true, name: true } }, supplier: true, items: true },
     }),
     prisma.order.count({ where }),
     prisma.purchaseBatch.findMany({ orderBy: { batchDate: 'desc' }, select: { id: true, name: true } }),
@@ -182,27 +182,28 @@ export default async function OrdersPage({
             >
               <div className="mb-1 flex items-start justify-between gap-2">
                 <div>
-                  <p className="text-sm font-medium">{o.customer.name}</p>
+                  <p className="text-sm font-medium">
+                    {o.customer.name}
+                    <span className="ml-1 font-normal text-muted-foreground">
+                      ···{o.customer.phone.slice(-4)}
+                    </span>
+                  </p>
                   <p className="text-xs text-muted-foreground">{o.orderNumber}</p>
                 </div>
                 <p className="text-sm font-medium">{formatCurrency(o.totalAmount.toString())}</p>
               </div>
-              <div className="mb-1.5 flex flex-wrap gap-1.5">
-                <span className="inline-flex items-center rounded-full bg-accent px-2 py-0.5 text-[10px] font-medium text-accent-foreground">
-                  {orderTypeLabels[o.orderType] ?? o.orderType}
-                </span>
-                {o.supplier && (
-                  <span className="inline-flex items-center rounded-full bg-secondary px-2 py-0.5 text-[10px] font-medium text-secondary-foreground">
-                    {o.supplier.name}
-                  </span>
-                )}
-                {o.poMonth && (
-                  <span className="inline-flex items-center rounded-full bg-secondary px-2 py-0.5 text-[10px] font-medium text-secondary-foreground">
-                    PO {o.poMonth}
-                    {o.etaMonth ? ` · ETA ${o.etaMonth}` : ''}
-                  </span>
-                )}
-              </div>
+              <p className="mb-1 text-xs text-foreground">
+                {o.items.map((it) => `${it.bookTitle}${it.quantity > 1 ? ` ×${it.quantity}` : ''}`).join(', ')}
+              </p>
+              <p className="mb-1.5 text-xs text-muted-foreground">
+                {[
+                  orderTypeLabels[o.orderType] ?? o.orderType,
+                  o.supplier?.name,
+                  o.poMonth ? `PO ${o.poMonth}${o.etaMonth ? ` · ETA ${o.etaMonth}` : ''}` : null,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </p>
               <div className="flex flex-wrap gap-1.5">
                 <PaymentStatusBadge status={o.paymentStatus} />
                 <OrderStatusBadge status={o.status} />
@@ -221,6 +222,7 @@ export default async function OrdersPage({
               <tr>
                 <th className="px-4 py-3 font-medium">Order #</th>
                 <th className="px-4 py-3 font-medium">Customer</th>
+                <th className="px-4 py-3 font-medium">Books</th>
                 <th className="px-4 py-3 font-medium">Type</th>
                 <th className="px-4 py-3 font-medium">Supplier</th>
                 <th className="px-4 py-3 font-medium">PO / ETA</th>
@@ -238,12 +240,14 @@ export default async function OrdersPage({
                       {o.orderNumber}
                     </Link>
                   </td>
-                  <td className="px-4 py-3">{o.customer.name}</td>
                   <td className="px-4 py-3">
-                    <span className="inline-flex items-center rounded-full bg-accent px-2 py-0.5 text-xs font-medium text-accent-foreground">
-                      {orderTypeLabels[o.orderType] ?? o.orderType}
-                    </span>
+                    <div>{o.customer.name}</div>
+                    <div className="text-xs text-muted-foreground">···{o.customer.phone.slice(-4)}</div>
                   </td>
+                  <td className="px-4 py-3 max-w-[220px] truncate text-muted-foreground" title={o.items.map((it) => it.bookTitle).join(', ')}>
+                    {o.items.map((it) => `${it.bookTitle}${it.quantity > 1 ? ` ×${it.quantity}` : ''}`).join(', ')}
+                  </td>
+                  <td className="px-4 py-3 text-muted-foreground">{orderTypeLabels[o.orderType] ?? o.orderType}</td>
                   <td className="px-4 py-3 text-muted-foreground">{o.supplier?.name ?? '—'}</td>
                   <td className="px-4 py-3 text-muted-foreground">
                     {o.poMonth ? (
@@ -276,7 +280,7 @@ export default async function OrdersPage({
               ))}
               {orders.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="px-4 py-10 text-center text-muted-foreground">
+                  <td colSpan={10} className="px-4 py-10 text-center text-muted-foreground">
                     No orders found.
                   </td>
                 </tr>

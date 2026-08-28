@@ -169,6 +169,8 @@ model Book {
   author       String?
   isbn         String?  @unique
   format       BookFormat?
+  weightGrams  Int?     // book weight only — packaging weight is added separately at shipping-calc time
+  imageUrl     String?  // cover image URL — from ISBN lookup or pasted manually, shown in order input, packing list, customer portal
   notes        String?
   isActive     Boolean  @default(true)
   createdAt    DateTime @default(now())

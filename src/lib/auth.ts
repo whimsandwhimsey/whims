@@ -58,7 +58,7 @@ export const authOptions: AuthOptions = {
         if (!credentials?.phone) return null;
         const phone = normalizePhone(credentials.phone);
 
-        const customer = await prisma.customer.findUnique({ where: { phone } });
+        const customer = await prisma.customer.findFirst({ where: { phone } });
         if (!customer || customer.status !== 'ACTIVE') return null;
 
         return {

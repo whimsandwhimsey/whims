@@ -33,7 +33,7 @@ export async function createCustomer(_prevState: FormState, formData: FormData):
 
   const phone = normalizePhone(parsed.data.phone);
 
-  const existing = await prisma.customer.findUnique({ where: { phone } });
+  const existing = await prisma.customer.findFirst({ where: { phone } });
   if (existing) {
     return { errors: { phone: ['A customer with this phone number already exists.'] } };
   }
@@ -76,7 +76,7 @@ export async function quickCreateCustomer(formData: FormData): Promise<QuickCrea
 
   const phone = normalizePhone(parsed.data.phone);
 
-  const existing = await prisma.customer.findUnique({ where: { phone } });
+  const existing = await prisma.customer.findFirst({ where: { phone } });
   if (existing) {
     return { success: false, error: 'A customer with this phone number already exists.' };
   }
@@ -111,7 +111,7 @@ export async function updateCustomer(
 
   const phone = normalizePhone(parsed.data.phone);
 
-  const existing = await prisma.customer.findUnique({ where: { phone } });
+  const existing = await prisma.customer.findFirst({ where: { phone } });
   if (existing && existing.id !== id) {
     return { errors: { phone: ['Another customer already uses this phone number.'] } };
   }
@@ -284,7 +284,7 @@ export async function importCustomersFromExcel(formData: FormData): Promise<Impo
     const address = addressCol ? String(row.getCell(addressCol).value ?? '').trim() : '';
     const notes = notesCol ? String(row.getCell(notesCol).value ?? '').trim() : '';
 
-    const existing = await prisma.customer.findUnique({ where: { phone } });
+    const existing = await prisma.customer.findFirst({ where: { phone } });
     if (existing) {
       errors.push(`Row ${rowNumber}: ${name} (${phone}) already exists, skipped.`);
       skipped++;

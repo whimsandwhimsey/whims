@@ -38,7 +38,7 @@ export async function requestCustomerSignup(formData: FormData): Promise<SignupR
 
   const phone = normalizePhone(parsed.data.phone);
 
-  const existing = await prisma.customer.findUnique({ where: { phone } });
+  const existing = await prisma.customer.findFirst({ where: { phone } });
   if (existing) {
     if (existing.status === 'ACTIVE') {
       return {

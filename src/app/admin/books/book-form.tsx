@@ -50,12 +50,14 @@ export function BookForm({
       const res = await fetch(`/api/books/lookup-isbn?isbn=${encodeURIComponent(isbn.trim())}`);
       const data = await res.json();
       if (!data.found) {
-        setLookupNote('Gak ketemu data buat ISBN ini — isi manual aja.');
+        setLookupNote('Gak ketemu di Google Books maupun Open Library — isi manual aja.');
         return;
       }
       if (data.title) setTitle(data.title);
       if (data.author) setAuthor(data.author);
       if (data.thumbnail) setImageUrl(data.thumbnail);
+
+      const sourceLabel = data.source === 'openlibrary' ? 'Open Library' : 'Google Books';
 
       if (data.publisher) {
         const match = publisherOptions.find(
@@ -63,14 +65,14 @@ export function BookForm({
         );
         if (match) {
           setPublisherId(match.value);
-          setLookupNote('Judul, author, dan publisher ke-isi otomatis. Berat tetap perlu diisi manual (timbang fisik bukunya).');
+          setLookupNote(`Judul, author, dan publisher ke-isi otomatis dari ${sourceLabel}. Berat tetap perlu diisi manual (timbang fisik bukunya).`);
         } else {
           setLookupNote(
-            `Judul & author ke-isi otomatis. Publisher terdeteksi "${data.publisher}" tapi belum ada di database — tambahin dulu di Database → Publishers, baru pilih di sini. Berat tetap perlu diisi manual.`
+            `Judul & author ke-isi otomatis dari ${sourceLabel}. Publisher terdeteksi "${data.publisher}" tapi belum ada di database — tambahin dulu di Database → Publishers, baru pilih di sini. Berat tetap perlu diisi manual.`
           );
         }
       } else {
-        setLookupNote('Judul & author ke-isi otomatis. Publisher gak ketemu — pilih manual. Berat tetap perlu diisi manual.');
+        setLookupNote(`Judul & author ke-isi otomatis dari ${sourceLabel}. Publisher gak ketemu — pilih manual. Berat tetap perlu diisi manual.`);
       }
     } catch {
       setLookupNote('Gagal cari data — coba lagi atau isi manual.');

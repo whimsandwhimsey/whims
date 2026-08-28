@@ -8,7 +8,7 @@ import { formatDate } from '@/lib/utils';
 export default async function PackingListPage() {
   const orders = await prisma.order.findMany({
     where: {
-      status: { in: ['ARRIVED', 'READY_TO_SHIP'] },
+      status: { in: ['ARRIVED'] },
       paymentStatus: { in: ['PAID', 'OVERPAID'] },
     },
     include: {

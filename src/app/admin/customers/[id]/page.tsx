@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { OrderStatusBadge, PaymentStatusBadge } from '@/components/status-badges';
 import { formatCurrency, formatDate } from '@/lib/utils';
+import { toNumber } from '@/lib/calculations';
 import { getCustomerDepositBalance } from '@/lib/deposit';
 import { DepositTopUpForm } from '../deposit-topup-form';
 import { RefundDepositForm } from '../refund-deposit-form';
@@ -21,7 +22,7 @@ export default async function CustomerProfilePage({ params }: { params: { id: st
   const customer = await prisma.customer.findUnique({ where: { id: params.id } });
   if (!customer) notFound();
 
-  const [orders, depositTxns, depositBalance] = await Promise.all([
+  const [orders, depositTxns, payments, depositBalance] = await Promise.all([
     prisma.order.findMany({
       where: { customerId: params.id },
       orderBy: { orderDate: 'desc' },
@@ -29,10 +30,58 @@ export default async function CustomerProfilePage({ params }: { params: { id: st
     prisma.depositTransaction.findMany({
       where: { customerId: params.id },
       orderBy: { createdAt: 'desc' },
-      include: { order: { select: { orderNumber: true } } },
+      include: { order: { select: { orderNumber: true } }, invoice: { select: { invoiceNumber: true } } },
+    }),
+    prisma.payment.findMany({
+      where: { customerId: params.id },
+      orderBy: { date: 'desc' },
+      include: { invoice: { select: { invoiceNumber: true } }, order: { select: { orderNumber: true } } },
     }),
     getCustomerDepositBalance(params.id),
   ]);
+
+  // One unified, chronological money timeline — every Payment (real cash)
+  // and every DepositTransaction (top-up/used/refund/adjustment) — instead
+  // of showing deposit activity in isolation. Deposit-USED entries are
+  // clearly labeled as reducing the deposit balance, not a fresh payment.
+  type HistoryRow = {
+    id: string;
+    date: Date;
+    kind: 'payment' | 'deposit';
+    label: string;
+    detail: string;
+    amount: number;
+    isCredit: boolean;
+  };
+
+  const paymentRows: HistoryRow[] = payments.map((p) => ({
+    id: `pay-${p.id}`,
+    date: p.date,
+    kind: 'payment',
+    label: p.method === 'BANK_TRANSFER' ? 'Bank Transfer' : 'QRIS',
+    detail: p.invoice ? `Invoice ${p.invoice.invoiceNumber}` : p.order ? `Order ${p.order.orderNumber}` : p.notes || 'Deposit top-up',
+    amount: toNumber(p.amount),
+    isCredit: true,
+  }));
+
+  const depositRows: HistoryRow[] = depositTxns.map((t) => ({
+    id: `dep-${t.id}`,
+    date: t.createdAt,
+    kind: 'deposit',
+    label: DEPOSIT_TYPE_LABELS[t.type] ?? t.type,
+    detail:
+      t.type === 'USED'
+        ? `Mengurangi deposit — dipakai untuk ${t.invoice ? `invoice ${t.invoice.invoiceNumber}` : t.order ? `order ${t.order.orderNumber}` : 'pembayaran'}`
+        : t.invoice
+          ? `Invoice ${t.invoice.invoiceNumber}`
+          : t.order
+            ? `Order ${t.order.orderNumber}`
+            : t.notes || '—',
+    amount: toNumber(t.amount),
+    isCredit: t.type === 'TOP_UP',
+  }));
+
+  const history = [...paymentRows, ...depositRows].sort((a, b) => b.date.getTime() - a.date.getTime());
 
   return (
     <div className="p-6">
@@ -92,42 +141,35 @@ export default async function CustomerProfilePage({ params }: { params: { id: st
 
           <Card>
             <CardHeader>
-              <CardTitle>Deposit history</CardTitle>
+              <CardTitle>Riwayat transaksi</CardTitle>
             </CardHeader>
             <CardContent className="p-0">
-              {depositTxns.length === 0 ? (
-                <p className="p-6 text-sm text-muted-foreground">No deposit transactions yet.</p>
+              {history.length === 0 ? (
+                <p className="p-6 text-sm text-muted-foreground">Belum ada transaksi.</p>
               ) : (
                 <table className="w-full text-sm">
                   <thead className="bg-secondary text-left text-xs uppercase tracking-wide text-muted-foreground">
                     <tr>
-                      <th className="px-4 py-2 font-medium">Date</th>
-                      <th className="px-4 py-2 font-medium">Type</th>
-                      <th className="px-4 py-2 font-medium">Notes</th>
-                      <th className="px-4 py-2 font-medium text-right">Amount</th>
-                      <th className="px-4 py-2 font-medium text-right">Balance after</th>
+                      <th className="px-4 py-2 font-medium">Tanggal</th>
+                      <th className="px-4 py-2 font-medium">Tipe</th>
+                      <th className="px-4 py-2 font-medium">Keterangan</th>
+                      <th className="px-4 py-2 font-medium text-right">Jumlah</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
-                    {depositTxns.map((t) => {
-                      const isCredit = t.type === 'TOP_UP';
-                      return (
-                        <tr key={t.id}>
-                          <td className="px-4 py-2 text-muted-foreground">{formatDate(t.createdAt)}</td>
-                          <td className="px-4 py-2">{DEPOSIT_TYPE_LABELS[t.type] ?? t.type}</td>
-                          <td className="px-4 py-2 text-muted-foreground">
-                            {t.order ? `Order ${t.order.orderNumber}` : t.notes || '—'}
-                          </td>
-                          <td
-                            className={`px-4 py-2 text-right font-medium ${isCredit ? 'text-success' : 'text-destructive'}`}
-                          >
-                            {isCredit ? '+' : '-'}
-                            {formatCurrency(t.amount.toString())}
-                          </td>
-                          <td className="px-4 py-2 text-right">{formatCurrency(t.balanceAfter.toString())}</td>
-                        </tr>
-                      );
-                    })}
+                    {history.map((row) => (
+                      <tr key={row.id}>
+                        <td className="px-4 py-2 text-muted-foreground">{formatDate(row.date)}</td>
+                        <td className="px-4 py-2">{row.label}</td>
+                        <td className="px-4 py-2 text-muted-foreground">{row.detail}</td>
+                        <td
+                          className={`px-4 py-2 text-right font-medium ${row.isCredit ? 'text-success' : 'text-destructive'}`}
+                        >
+                          {row.isCredit ? '+' : '-'}
+                          {formatCurrency(row.amount)}
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               )}

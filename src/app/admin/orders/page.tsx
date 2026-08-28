@@ -19,7 +19,6 @@ const STATUS_LABELS: Record<string, string> = {
   IN_TRANSIT: 'Dalam perjalanan',
   ARRIVED_COUNTRY: 'Tiba di Indonesia',
   ARRIVED: 'Tiba di gudang',
-  READY_TO_SHIP: 'Ready to Ship',
   SHIPPED: 'Terkirim',
   COMPLETED: 'Completed',
   CANCELLED: 'Cancelled',

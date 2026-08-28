@@ -6,7 +6,7 @@ import type { Prisma } from '@prisma/client';
  * customer/PO month/order type/supplier starts a fresh order instead of
  * reopening a closed one.
  */
-const MERGEABLE_STATUSES = ['WAITING', 'ARRIVED', 'READY_TO_SHIP'] as const;
+const MERGEABLE_STATUSES = ['WAITING', 'ARRIVED'] as const;
 
 export type MergeKey = {
   customerId: string;

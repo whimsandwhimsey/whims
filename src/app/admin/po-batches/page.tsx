@@ -6,9 +6,10 @@ import { Card } from '@/components/ui/card';
 import { formatDate } from '@/lib/utils';
 
 const TYPE_LABELS: Record<string, string> = {
-  FAST: 'Fast PO (4–8 weeks)',
-  REGULAR: 'PO Reg (4–5 months)',
+  PO_REGULAR: 'PO Reguler',
+  PO_REMAINDER: 'PO Remainder',
   READY_STOCK: 'Ready Stock',
+  EVENT_JASTIP: 'Event / Jastip',
 };
 
 export default async function PoBatchesPage() {

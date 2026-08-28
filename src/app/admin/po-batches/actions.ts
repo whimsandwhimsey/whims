@@ -8,10 +8,11 @@ import { requireStaffSession } from '@/lib/guards';
 import { writeAuditLog } from '@/lib/audit';
 import { generateInvoiceNumber } from '@/lib/invoice-number';
 import { toNumber } from '@/lib/calculations';
+import { computeDpAmount } from '@/lib/invoice-calculations';
 
 const batchSchema = z.object({
   name: z.string().min(1, 'Name is required').max(200),
-  type: z.enum(['FAST', 'REGULAR', 'READY_STOCK']),
+  type: z.enum(['PO_REGULAR', 'PO_REMAINDER', 'READY_STOCK', 'EVENT_JASTIP']),
   batchDate: z.string().min(1),
   expectedArrivalDate: z.string().optional().or(z.literal('')),
   notes: z.string().max(1000).optional().or(z.literal('')),
@@ -121,11 +122,11 @@ export async function deletePoBatch(id: string) {
 export type GenerateInvoicesResult = { created: number; skipped: number; errors: string[] };
 
 /**
- * Generates one invoice per order in a PO batch, applying the batch's
- * pricing rule automatically:
- *   - FAST:        Deposit invoice, 50% of the order's total.
- *   - REGULAR:     Deposit invoice, Rp 50,000 per book (per unit ordered).
- *   - READY_STOCK: Ready Stock invoice for the full order total.
+ * Generates one invoice per order in a PO batch:
+ *   - READY_STOCK / EVENT_JASTIP batches: full-amount invoice for each order.
+ *   - PO_REGULAR / PO_REMAINDER batches: DEPOSIT invoice per order, amount
+ *     computed from that order's own dpType/dpValue rule (set when the
+ *     order was created — see order-form.tsx).
  * Orders that already have an invoice of the applicable type are skipped.
  */
 export async function generateInvoicesForBatch(batchId: string): Promise<GenerateInvoicesResult> {
@@ -139,7 +140,8 @@ export async function generateInvoicesForBatch(batchId: string): Promise<Generat
     include: { items: true, invoices: true },
   });
 
-  const invoiceType = batch.type === 'READY_STOCK' ? 'READY_STOCK' : 'DEPOSIT';
+  const isPoType = batch.type === 'PO_REGULAR' || batch.type === 'PO_REMAINDER';
+  const invoiceType = isPoType ? 'DEPOSIT' : 'READY_STOCK';
 
   let created = 0;
   let skipped = 0;
@@ -156,14 +158,13 @@ export async function generateInvoicesForBatch(batchId: string): Promise<Generat
     const totalAmount = toNumber(order.totalAmount);
     const totalQuantity = order.items.reduce((sum, item) => sum + item.quantity, 0);
 
-    let amount: number;
-    if (batch.type === 'FAST') {
-      amount = Math.round(totalAmount * 0.5);
-    } else if (batch.type === 'REGULAR') {
-      amount = totalQuantity * 50000;
-    } else {
-      amount = totalAmount;
-    }
+    const amount = isPoType
+      ? computeDpAmount(
+          { dpType: order.dpType as any, dpValue: order.dpValue ? toNumber(order.dpValue) : null },
+          totalAmount,
+          totalQuantity
+        )
+      : totalAmount;
 
     if (amount <= 0) {
       skipped++;
@@ -171,7 +172,7 @@ export async function generateInvoicesForBatch(batchId: string): Promise<Generat
       continue;
     }
 
-        const invoiceNumber = await generateInvoiceNumber();
+    const invoiceNumber = await generateInvoiceNumber();
     await prisma.invoice.create({
       data: {
         invoiceNumber,
@@ -186,7 +187,6 @@ export async function generateInvoicesForBatch(batchId: string): Promise<Generat
     });
     created++;
   }
-
 
   await writeAuditLog({
     userId: session.user.id,

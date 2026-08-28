@@ -7,6 +7,7 @@ import { requireStaffSession } from '@/lib/guards';
 import { writeAuditLog } from '@/lib/audit';
 import { generateOrderNumberWithRetry } from '@/lib/order-number';
 import { findMergeableOrder, isMergeableOrderType } from '@/lib/order-merge';
+import { findOrCreatePurchaseBatch } from '@/lib/po-batch';
 import {
   computeOrderTotals,
   computePaymentStatus,
@@ -26,7 +27,7 @@ export type SaveOrderInput = {
   supplierId?: string | null;
   dpType?: string;
   dpValue?: number;
-  poBatchId?: string | null;
+  newBatchName?: string;
   orderDate: string;
   expectedArrivalDate?: string;
   actualArrivalDate?: string;
@@ -95,13 +96,7 @@ export async function saveOrder(input: SaveOrderInput): Promise<SaveOrderResult>
   const customer = await prisma.customer.findUnique({ where: { id: data.customerId } });
   if (!customer) return { success: false, error: 'Selected customer does not exist.' };
 
-  // If a PO batch is selected, its expected arrival date is the source of
-  // truth for every order in it — override whatever the form submitted.
-  let expectedArrivalDate = data.expectedArrivalDate ? new Date(data.expectedArrivalDate) : null;
-  if (data.poBatchId) {
-    const batch = await prisma.purchaseBatch.findUnique({ where: { id: data.poBatchId } });
-    if (batch?.expectedArrivalDate) expectedArrivalDate = batch.expectedArrivalDate;
-  }
+  const expectedArrivalDate = data.expectedArrivalDate ? new Date(data.expectedArrivalDate) : null;
 
   const totals = computeOrderTotals(data.items);
 
@@ -130,6 +125,19 @@ export async function saveOrder(input: SaveOrderInput): Promise<SaveOrderResult>
           }))
         );
 
+        const resolvedPoBatchId = isMergeableOrderType(data.orderType)
+          ? await findOrCreatePurchaseBatch(
+              tx,
+              {
+                orderType: data.orderType,
+                poMonth: data.poMonth || null,
+                etaMonth: data.etaMonth || null,
+                supplierId: data.supplierId || null,
+              },
+              data.newBatchName
+            )
+          : null;
+
         return tx.order.update({
           where: { id: input.id },
           data: {
@@ -141,7 +149,7 @@ export async function saveOrder(input: SaveOrderInput): Promise<SaveOrderResult>
             dpType: isMergeableOrderType(data.orderType) ? (data.dpType as any) || null : null,
             dpValue: isMergeableOrderType(data.orderType) ? data.dpValue ?? null : null,
             supplierId: data.supplierId || null,
-            poBatchId: data.poBatchId || null,
+            poBatchId: resolvedPoBatchId,
             orderDate: new Date(data.orderDate),
             expectedArrivalDate,
             actualArrivalDate: data.actualArrivalDate ? new Date(data.actualArrivalDate) : null,
@@ -274,6 +282,19 @@ export async function saveOrder(input: SaveOrderInput): Promise<SaveOrderResult>
         }))
       );
 
+      const resolvedPoBatchId = isMergeableOrderType(data.orderType)
+        ? await findOrCreatePurchaseBatch(
+            tx,
+            {
+              orderType: data.orderType,
+              poMonth: data.poMonth || null,
+              etaMonth: data.etaMonth || null,
+              supplierId: data.supplierId || null,
+            },
+            data.newBatchName
+          )
+        : null;
+
       return tx.order.create({
         data: {
           orderNumber,
@@ -285,7 +306,7 @@ export async function saveOrder(input: SaveOrderInput): Promise<SaveOrderResult>
           dpType: isMergeableOrderType(data.orderType) ? (data.dpType as any) || null : null,
           dpValue: isMergeableOrderType(data.orderType) ? data.dpValue ?? null : null,
           supplierId: data.supplierId || null,
-          poBatchId: data.poBatchId || null,
+          poBatchId: resolvedPoBatchId,
           orderDate: new Date(data.orderDate),
           expectedArrivalDate,
           actualArrivalDate: data.actualArrivalDate ? new Date(data.actualArrivalDate) : null,
@@ -364,6 +385,59 @@ export async function updateOrderStatus(id: string, status: string) {
 
   revalidatePath('/admin/orders');
   revalidatePath(`/admin/orders/${id}`);
+
+  // Let the UI offer to propagate this status to the rest of the batch —
+  // count only orders that don't already share this status.
+  let batchSiblingCount = 0;
+  if (order.poBatchId) {
+    batchSiblingCount = await prisma.order.count({
+      where: { poBatchId: order.poBatchId, id: { not: id }, status: { not: status as any } },
+    });
+  }
+  return { poBatchId: order.poBatchId, batchSiblingCount };
+}
+
+/**
+ * Applies the same shipping status to every other order in a PO batch —
+ * called only after the admin explicitly confirms via the prompt shown
+ * when updateOrderStatus finds sibling orders in a different status.
+ */
+export async function updateBatchOrdersStatus(poBatchId: string, status: string, excludeOrderId: string) {
+  const session = await requireStaffSession();
+
+  if (!orderStatusValues.includes(status as (typeof orderStatusValues)[number])) {
+    throw new Error('Invalid status.');
+  }
+
+  const orders = await prisma.order.findMany({
+    where: { poBatchId, id: { not: excludeOrderId } },
+  });
+
+  const shouldStampArrival = status === 'ARRIVED';
+
+  for (const o of orders) {
+    await prisma.order.update({
+      where: { id: o.id },
+      data: {
+        status: status as (typeof orderStatusValues)[number],
+        ...(shouldStampArrival && !o.actualArrivalDate ? { actualArrivalDate: new Date() } : {}),
+      },
+    });
+  }
+
+  const batch = await prisma.purchaseBatch.findUnique({ where: { id: poBatchId } });
+
+  await writeAuditLog({
+    userId: session.user.id,
+    action: 'UPDATE',
+    entityType: 'PurchaseBatch',
+    entityId: poBatchId,
+    summary: `Bulk-updated ${orders.length} order(s) in batch "${batch?.name ?? poBatchId}" to status ${status}`,
+  });
+
+  revalidatePath('/admin/orders');
+  for (const o of orders) revalidatePath(`/admin/orders/${o.id}`);
+  return { updated: orders.length };
 }
 
 /**

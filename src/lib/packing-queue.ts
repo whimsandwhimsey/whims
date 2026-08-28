@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma';
  * Statuses that count as "arrived at our warehouse or further along" —
  * the minimum shipping stage for an order to be pack-able at all.
  */
-const ARRIVED_OR_LATER = ['ARRIVED', 'READY_TO_SHIP'] as const;
+const ARRIVED_OR_LATER = ['ARRIVED'] as const;
 
 /**
  * The packing queue: every order that's fully paid (all its invoices

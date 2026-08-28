@@ -30,7 +30,6 @@ type Book = {
   isbn: string | null;
   format: string | null;
 };
-type PoBatch = { id: string; name: string; type: string; expectedArrivalDate: Date | null };
 type Supplier = { id: string; name: string };
 
 type ItemRow = {
@@ -76,7 +75,6 @@ type ExistingOrder = {
 const STATUS_LABELS: Record<string, string> = {
   WAITING: 'Waiting',
   ARRIVED: 'Arrived',
-  READY_TO_SHIP: 'Ready to Ship',
   SHIPPED: 'Shipped',
   COMPLETED: 'Completed',
   CANCELLED: 'Cancelled',
@@ -94,13 +92,11 @@ function newRowKey() {
 export function OrderForm({
   customers,
   books,
-  poBatches,
   suppliers,
   order,
 }: {
   customers: Customer[];
   books: Book[];
-  poBatches: PoBatch[];
   suppliers: Supplier[];
   order?: ExistingOrder;
 }) {
@@ -125,7 +121,7 @@ export function OrderForm({
   const [dpValue, setDpValue] = useState(
     order?.dpValue !== undefined && order?.dpValue !== null ? String(toNumber(order.dpValue as any)) : '25'
   );
-  const [poBatchId, setPoBatchId] = useState(order?.poBatchId ?? '');
+  const [newBatchName, setNewBatchName] = useState('');
   const [orderDate, setOrderDate] = useState(
     toDateInputValue(order?.orderDate) || new Date().toISOString().slice(0, 10)
   );
@@ -170,8 +166,6 @@ export function OrderForm({
 
   const totals = useMemo(() => computeOrderTotals(items), [items]);
 
-  const selectedBatch = poBatches.find((b) => b.id === poBatchId);
-
   const NEW_CUSTOMER_VALUE = '__new_customer__';
   const customerOptions = useMemo(
     () => [
@@ -214,10 +208,6 @@ export function OrderForm({
       setNewCustomerAddress('');
     });
   }
-  const poBatchOptions = useMemo(
-    () => poBatches.map((b) => ({ value: b.id, label: b.name })),
-    [poBatches]
-  );
   const supplierOptions = useMemo(
     () => suppliers.map((s) => ({ value: s.id, label: s.name })),
     [suppliers]
@@ -274,16 +264,6 @@ export function OrderForm({
     });
   }
 
-  function handleBatchChange(nextBatchId: string) {
-    setPoBatchId(nextBatchId);
-    const batch = poBatches.find((b) => b.id === nextBatchId);
-    // Expected arrival is pulled from the batch — keeps every order in a
-    // batch showing the same estimate without re-typing it each time.
-    if (batch?.expectedArrivalDate) {
-      setExpectedArrivalDate(toDateInputValue(batch.expectedArrivalDate));
-    }
-  }
-
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -311,7 +291,7 @@ export function OrderForm({
       supplierId: supplierId || null,
       dpType: needsPoMonth ? dpType : undefined,
       dpValue: needsPoMonth ? Number(dpValue) : undefined,
-      poBatchId: poBatchId || null,
+      newBatchName: needsPoMonth ? newBatchName || undefined : undefined,
       orderDate,
       expectedArrivalDate: expectedArrivalDate || undefined,
       actualArrivalDate: actualArrivalDate || undefined,
@@ -502,25 +482,22 @@ export function OrderForm({
                   required
                 />
               </div>
+              <div className="space-y-1.5 sm:col-span-2">
+                <Label htmlFor="newBatchName">Nama PO batch (kalau ini batch baru)</Label>
+                <Input
+                  id="newBatchName"
+                  value={newBatchName}
+                  onChange={(e) => setNewBatchName(e.target.value)}
+                  placeholder="Kosongin aja kalau gak yakin — nama otomatis dibikin"
+                />
+              </div>
               <div className="rounded-md border border-border bg-secondary/50 p-3 text-xs text-muted-foreground sm:col-span-2">
-                Customer, PO month, order type, and supplier that match an existing open order
-                will automatically merge into that order&apos;s invoice instead of creating a
-                new one.
+                PO batch otomatis kepilih/kebikin sendiri berdasarkan order type + PO month +
+                supplier. Customer, PO month, order type, dan supplier yang sama dengan order
+                terbuka lain akan otomatis gabung ke invoice yang sama juga.
               </div>
             </>
           )}
-
-          <div className="space-y-1.5">
-            <Label htmlFor="poBatchId">PO Batch (optional)</Label>
-            <SearchableSelect
-              id="poBatchId"
-              options={poBatchOptions}
-              value={poBatchId}
-              onChange={handleBatchChange}
-              placeholder="No batch"
-              emptyLabel="— No batch —"
-            />
-          </div>
 
           <div className="space-y-1.5">
             <Label htmlFor="status">Status</Label>

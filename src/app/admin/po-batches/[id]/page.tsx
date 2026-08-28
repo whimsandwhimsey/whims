@@ -9,17 +9,20 @@ import { OrderStatusBadge, PaymentStatusBadge } from '@/components/status-badges
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { deletePoBatch } from '../actions';
 import { GenerateInvoicesButton } from '../generate-invoices-button';
+import { BatchStatusChanger } from '../batch-status-changer';
 
 const TYPE_LABELS: Record<string, string> = {
-  FAST: 'Fast PO (4–8 weeks)',
-  REGULAR: 'PO Reg (4–5 months)',
+  PO_REGULAR: 'PO Reguler',
+  PO_REMAINDER: 'PO Remainder',
   READY_STOCK: 'Ready Stock',
+  EVENT_JASTIP: 'Event / Jastip',
 };
 
 const TYPE_RULE: Record<string, string> = {
-  FAST: '50% deposit of order total',
-  REGULAR: 'Rp 50,000 deposit per book ordered',
+  PO_REGULAR: 'DP per order, sesuai DP rule masing-masing order',
+  PO_REMAINDER: 'DP per order, sesuai DP rule masing-masing order',
   READY_STOCK: 'Full order amount',
+  EVENT_JASTIP: 'Full order amount',
 };
 
 export default async function PoBatchDetailPage({ params }: { params: { id: string } }) {
@@ -72,6 +75,15 @@ export default async function PoBatchDetailPage({ params }: { params: { id: stri
         </CardHeader>
         <CardContent>
           <GenerateInvoicesButton batchId={batch.id} />
+        </CardContent>
+      </Card>
+
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle className="text-base">Shipping status</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <BatchStatusChanger poBatchId={batch.id} orderCount={batch.orders.length} />
         </CardContent>
       </Card>
 

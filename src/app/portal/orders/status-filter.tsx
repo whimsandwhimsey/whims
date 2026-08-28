@@ -7,7 +7,6 @@ import { orderStatusValues } from '@/lib/validations';
 const STATUS_LABELS: Record<string, string> = {
   WAITING: 'Waiting',
   ARRIVED: 'Arrived',
-  READY_TO_SHIP: 'Ready to Ship',
   SHIPPED: 'Shipped',
   COMPLETED: 'Completed',
   CANCELLED: 'Cancelled',

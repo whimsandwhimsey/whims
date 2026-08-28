@@ -4,7 +4,7 @@ import { useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Select } from '@/components/ui/select';
 import { orderStatusValues } from '@/lib/validations';
-import { updateOrderStatus, updateBatchOrdersStatus } from './actions';
+import { updateBatchOrdersStatus } from '../orders/actions';
 
 const STATUS_LABELS: Record<string, string> = {
   WAITING: 'Open',
@@ -16,32 +16,26 @@ const STATUS_LABELS: Record<string, string> = {
   CANCELLED: 'Cancelled',
 };
 
-export function StatusChanger({ orderId, current }: { orderId: string; current: string }) {
+export function BatchStatusChanger({ poBatchId, orderCount }: { poBatchId: string; orderCount: number }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
   function handleChange(next: string) {
+    const confirmed = window.confirm(
+      `Update status ke "${STATUS_LABELS[next] ?? next}" untuk semua ${orderCount} order di batch ini?`
+    );
+    if (!confirmed) return;
     startTransition(async () => {
-      const result = await updateOrderStatus(orderId, next);
-      if (result?.poBatchId && result.batchSiblingCount > 0) {
-        const confirmed = window.confirm(
-          `Update status yang sama (${STATUS_LABELS[next] ?? next}) untuk ${result.batchSiblingCount} order lain di PO batch yang sama juga?`
-        );
-        if (confirmed) {
-          await updateBatchOrdersStatus(result.poBatchId, next, orderId);
-        }
-      }
+      await updateBatchOrdersStatus(poBatchId, next, '');
       router.refresh();
     });
   }
 
   return (
-    <Select
-      value={current}
-      disabled={isPending}
-      onChange={(e) => handleChange(e.target.value)}
-      className="w-48"
-    >
+    <Select disabled={isPending || orderCount === 0} onChange={(e) => handleChange(e.target.value)} defaultValue="">
+      <option value="" disabled>
+        Update status semua order…
+      </option>
       {orderStatusValues.map((s) => (
         <option key={s} value={s}>
           {STATUS_LABELS[s]}

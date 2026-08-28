@@ -23,12 +23,6 @@ enum CustomerStatus {
   ARCHIVED  // soft-deleted — has order/payment history that must be kept
 }
 
-enum PoBatchType {
-  FAST          // Fast PO — 4-8 weeks
-  REGULAR       // PO Reg — 4-5 months
-  READY_STOCK   // already in stock, no waiting
-}
-
 enum OrderType {
   READY_STOCK     // in stock, full payment upfront
   EVENT_JASTIP    // jastip / event pre-order, full payment upfront
@@ -69,8 +63,7 @@ enum OrderStatus {
   WAITING          // open — placed, not yet shipped from supplier
   IN_TRANSIT       // dalam perjalanan ke Indonesia
   ARRIVED_COUNTRY  // tiba di Indonesia (customs/port)
-  ARRIVED          // tiba di gudang kita
-  READY_TO_SHIP    // packed / ready (internal packing step)
+  ARRIVED          // tiba di gudang kita — ready to pack
   SHIPPED          // terkirim ke customer
   COMPLETED        // delivered & closed
   CANCELLED
@@ -222,10 +215,17 @@ model Publisher {
 /// A named purchase-order batch (e.g. "Fast PO — July Batch 2"). Groups
 /// orders together so invoicing rules and expected timing can be set once
 /// per batch instead of per order.
+/// A PO batch groups every order sharing the same order type + PO month +
+/// supplier — this is the same key used to auto-merge orders (see
+/// lib/order-merge.ts) and lib/po-batch.ts auto-finds-or-creates the right
+/// batch as orders are entered, so this never has to be picked by hand for
+/// PO_REGULAR / PO_REMAINDER orders.
 model PurchaseBatch {
   id                  String      @id @default(cuid())
   name                String
-  type                PoBatchType
+  type                OrderType
+  poMonth             String?
+  etaMonth            String?
   batchDate           DateTime    @default(now())
   expectedArrivalDate DateTime?
   notes               String?
@@ -239,6 +239,7 @@ model PurchaseBatch {
 
   @@index([type])
   @@index([supplierId])
+  @@index([type, poMonth, supplierId])
   @@map("purchase_batches")
 }
 

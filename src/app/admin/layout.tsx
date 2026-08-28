@@ -2,9 +2,7 @@ import Link from 'next/link';
 import {
   LayoutDashboard,
   Users,
-  BookOpen,
-  Building2,
-  Warehouse,
+  Database,
   ShoppingCart,
   PlusCircle,
   Receipt,
@@ -29,9 +27,7 @@ const DESKTOP_NAV_ITEMS = [
   { href: '/admin/packing', label: 'Packing List', icon: Truck },
   { href: '/admin/requests', label: 'Requests', icon: Inbox },
   { href: '/admin/customers', label: 'Customers', icon: Users },
-  { href: '/admin/books', label: 'Books', icon: BookOpen },
-  { href: '/admin/suppliers', label: 'Suppliers', icon: Warehouse },
-  { href: '/admin/publishers', label: 'Publishers', icon: Building2 },
+  { href: '/admin/database', label: 'Database', icon: Database },
   { href: '/admin/po-batches', label: 'PO Batches', icon: Package },
   { href: '/admin/payments', label: 'Payments', icon: Receipt },
   { href: '/admin/expenses', label: 'Expenses', icon: Wallet },
@@ -56,7 +52,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
     <div className="flex min-h-screen bg-background">
       <aside className="hidden w-64 shrink-0 border-r border-border bg-card md:flex md:flex-col">
         <div className="flex h-16 items-center gap-2 border-b border-border px-6">
-          <Logo className="max-w-[140px]" />
+          <Link href="/admin/dashboard">
+            <Logo className="max-w-[140px]" />
+          </Link>
         </div>
         <nav className="flex-1 space-y-0.5 overflow-y-auto p-3">
           {DESKTOP_NAV_ITEMS.map((item) => (
@@ -77,7 +75,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
       {/* Mobile top bar */}
       <div className="fixed inset-x-0 top-0 z-10 flex h-14 items-center justify-between border-b border-border bg-card px-4 md:hidden">
-        <Logo className="max-w-[110px]" />
+        <Link href="/admin/dashboard">
+          <Logo className="max-w-[110px]" />
+        </Link>
         <div className="flex gap-2">
           <Button variant="ghost" size="sm" asChild>
             <Link href="/admin/account">Account</Link>

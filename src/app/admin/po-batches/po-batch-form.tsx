@@ -41,10 +41,11 @@ export function PoBatchForm({
 
       <div className="space-y-1.5">
         <Label htmlFor="type">Type</Label>
-        <Select id="type" name="type" defaultValue={batch?.type ?? 'FAST'} required>
-          <option value="FAST">Fast PO (4–8 weeks) — 50% deposit</option>
-          <option value="REGULAR">PO Reg (4–5 months) — Rp 50,000/book deposit</option>
-          <option value="READY_STOCK">Ready Stock — full amount</option>
+        <Select id="type" name="type" defaultValue={batch?.type ?? 'PO_REGULAR'} required>
+          <option value="PO_REGULAR">PO Reguler</option>
+          <option value="PO_REMAINDER">PO Remainder</option>
+          <option value="READY_STOCK">Ready Stock</option>
+          <option value="EVENT_JASTIP">Event / Jastip</option>
         </Select>
         <FieldError errors={state?.errors?.type} />
       </div>

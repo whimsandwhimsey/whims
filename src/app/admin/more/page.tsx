@@ -1,9 +1,7 @@
 import Link from 'next/link';
 import {
   Users,
-  BookOpen,
-  Building2,
-  Warehouse,
+  Database,
   Package,
   Receipt,
   Wallet,
@@ -16,9 +14,7 @@ import {
 
 const MORE_ITEMS = [
   { href: '/admin/customers', label: 'Customers', icon: Users },
-  { href: '/admin/books', label: 'Books', icon: BookOpen },
-  { href: '/admin/suppliers', label: 'Suppliers', icon: Warehouse },
-  { href: '/admin/publishers', label: 'Publishers', icon: Building2 },
+  { href: '/admin/database', label: 'Database', icon: Database },
   { href: '/admin/po-batches', label: 'PO Batches', icon: Package },
   { href: '/admin/payments', label: 'Payments', icon: Receipt },
   { href: '/admin/expenses', label: 'Expenses', icon: Wallet },

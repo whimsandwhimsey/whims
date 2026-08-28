@@ -65,7 +65,7 @@ export function InvoiceDocument({ data, id }: { data: InvoiceDocumentData; id?: 
           <p className="mb-1 text-xs uppercase tracking-wide text-muted-foreground">Bill to</p>
           <p className="font-medium">{data.customer.name}</p>
           <p className="text-xs text-muted-foreground">{data.customer.phone}</p>
-          {data.customer.address && (
+          {data.customer.address && !showAddressConfirm && (
             <p className="text-xs text-muted-foreground">{data.customer.address}</p>
           )}
         </div>

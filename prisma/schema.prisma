@@ -52,6 +52,8 @@ enum BookFormat {
   PAPERBACK
   HARDCOVER
   BOXSET
+  BOARD_BOOK
+  SOUND_BOOK
 }
 
 enum StaffRole {
@@ -143,7 +145,7 @@ model User {
 model Customer {
   id        String   @id @default(cuid())
   name      String
-  phone     String   @unique
+  phone     String
   address   String?
   notes     String?
   status    CustomerStatus @default(ACTIVE)
@@ -156,6 +158,7 @@ model Customer {
   topUpRequests    TopUpRequest[]
   addressChangeRequests AddressChangeRequest[]
 
+  @@index([phone])
   @@index([name])
   @@index([status])
   @@map("customers")

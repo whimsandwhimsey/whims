@@ -12,11 +12,13 @@ export const customerSchema = z.object({
 });
 export type CustomerFormValues = z.infer<typeof customerSchema>;
 
-export const bookFormatValues = ['PAPERBACK', 'HARDCOVER', 'BOXSET'] as const;
+export const bookFormatValues = ['PAPERBACK', 'HARDCOVER', 'BOXSET', 'BOARD_BOOK', 'SOUND_BOOK'] as const;
 export const bookFormatLabels: Record<string, string> = {
   PAPERBACK: 'Paperback',
   HARDCOVER: 'Hardcover',
   BOXSET: 'Boxset',
+  BOARD_BOOK: 'Board Book',
+  SOUND_BOOK: 'Sound Book',
 };
 
 export const supplierSchema = z.object({

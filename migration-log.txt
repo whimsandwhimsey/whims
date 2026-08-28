@@ -1,0 +1,45 @@
+nohup: ignoring input
+
+> whims-whimsey-oms@1.0.0 migrate:legacy:commit
+> tsx scripts/migrate-legacy.ts --commit
+
+
+=== COMMIT MODE — writing to Neon ===
+
+
+Recalculating invoice & order payment status from migrated payments...
+
+========== MIGRATION REPORT ==========
+
+Suppliers  : { seen: 14, created: 0, skipped: 14 }
+Publishers : { seen: 26, created: 0, skipped: 26 }
+Books      : {
+  seen: 212,
+  created: 0,
+  skipped: 212,
+  noIsbn: 2133,
+  unmappedFormats: []
+}
+Customers  : { seen: 373, created: 0, skipped: 373 }
+Orders     : {
+  seen: 1489,
+  migrated: 0,
+  skipped: 1373,
+  archivedStock: 116,
+  unmappedStatuses: []
+}
+Invoices   : { seen: 753, created: 0, skipped: 753, unmappedTypes: [] }
+Payments   : { seen: 433, created: 0, skipped: 433, unmappedMethods: [] }
+Expenses   : { seen: 0, created: 0, skipped: 0 }
+
+Totals check (should be close — small gaps are OK, they come from rows that
+were skipped because their order/customer wasn't migrated, e.g. archived Stock rows):
+  Legacy order amount sum   : 0
+  Migrated order amount sum : 0
+  Legacy payment sum        : 122.565.488
+  Migrated payment sum      : 0
+
+Archived (not migrated) 'Stock' orders: 116
+
+(COMMIT — the above was written to Neon.)
+

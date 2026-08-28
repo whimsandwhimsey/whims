@@ -521,22 +521,16 @@ export function OrderForm({
             />
           </div>
 
-          <div className="space-y-1.5">
+            <div className="space-y-1.5">
             <Label htmlFor="expectedArrivalDate">Expected warehouse arrival</Label>
             <Input
               id="expectedArrivalDate"
               type="date"
               value={expectedArrivalDate}
               onChange={(e) => setExpectedArrivalDate(e.target.value)}
-              disabled={!!selectedBatch?.expectedArrivalDate}
             />
-            {selectedBatch?.expectedArrivalDate ? (
-              <p className="text-xs text-muted-foreground">
-                Pulled from &quot;{selectedBatch.name}&quot; — edit the batch to change this for all
-                its orders.
-              </p>
-            ) : null}
           </div>
+
 
           <div className="space-y-1.5">
             <Label htmlFor="actualArrivalDate">Actual arrival date</Label>

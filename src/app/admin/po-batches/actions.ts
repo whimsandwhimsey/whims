@@ -98,6 +98,22 @@ export async function updatePoBatch(id: string, _prevState: FormState, formData:
   redirect(`/admin/po-batches/${id}`);
 }
 
+export async function togglePoBatchOpen(id: string, isOpen: boolean) {
+  const session = await requireStaffSession();
+  const batch = await prisma.purchaseBatch.update({ where: { id }, data: { isOpen } });
+
+  await writeAuditLog({
+    userId: session.user.id,
+    action: 'UPDATE',
+    entityType: 'PurchaseBatch',
+    entityId: id,
+    summary: `${isOpen ? 'Reopened' : 'Closed'} PO batch "${batch.name}"`,
+  });
+
+  revalidatePath('/admin/po-batches');
+  revalidatePath(`/admin/po-batches/${id}`);
+}
+
 export async function deletePoBatch(id: string) {
   const session = await requireStaffSession();
 

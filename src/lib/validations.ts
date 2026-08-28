@@ -93,6 +93,7 @@ export const orderSchema = z
     dpType: z.enum(['PERCENTAGE', 'FIXED_PER_BOOK', 'FIXED_TOTAL']).optional(),
     dpValue: z.coerce.number().min(0).optional(),
     newBatchName: z.string().max(200).optional(),
+    existingBatchId: z.string().optional(),
     orderDate: z.string().min(1),
     expectedArrivalDate: z.string().optional().or(z.literal('')),
     actualArrivalDate: z.string().optional().or(z.literal('')),

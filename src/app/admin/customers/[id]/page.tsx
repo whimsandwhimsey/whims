@@ -59,7 +59,11 @@ export default async function CustomerProfilePage({ params }: { params: { id: st
     date: p.date,
     kind: 'payment',
     label: p.method === 'BANK_TRANSFER' ? 'Bank Transfer' : 'QRIS',
-    detail: p.invoice ? `Invoice ${p.invoice.invoiceNumber}` : p.order ? `Order ${p.order.orderNumber}` : p.notes || 'Deposit top-up',
+    detail: p.invoice
+      ? `Pembayaran untuk ${p.invoice.invoiceNumber}`
+      : p.order
+        ? `Order ${p.order.orderNumber}`
+        : p.notes || 'Deposit top-up',
     amount: toNumber(p.amount),
     isCredit: true,
   }));
@@ -72,8 +76,8 @@ export default async function CustomerProfilePage({ params }: { params: { id: st
     detail:
       t.type === 'USED'
         ? `Mengurangi deposit — dipakai untuk ${t.invoice ? `invoice ${t.invoice.invoiceNumber}` : t.order ? `order ${t.order.orderNumber}` : 'pembayaran'}`
-        : t.invoice
-          ? `Invoice ${t.invoice.invoiceNumber}`
+        : t.type === 'TOP_UP' && t.invoice
+          ? `Sisa balance dari pembayaran ${t.invoice.invoiceNumber}`
           : t.order
             ? `Order ${t.order.orderNumber}`
             : t.notes || '—',

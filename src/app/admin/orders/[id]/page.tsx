@@ -13,6 +13,7 @@ import { StatusChanger } from '../status-changer';
 import { deleteOrder } from '../actions';
 import { InvoicePaymentActions } from './invoice-payment-actions';
 import { CreateInvoiceForm } from './create-invoice-form';
+import { OosItemActions } from './oos-item-actions';
 import { bookFormatLabels } from '@/lib/validations';
 
 const INVOICE_TYPE_LABELS: Record<string, string> = {
@@ -134,13 +135,21 @@ export default async function OrderDetailPage({
                     <th className="px-4 py-2 font-medium text-right">Price</th>
                     <th className="px-4 py-2 font-medium text-right">Discount</th>
                     <th className="px-4 py-2 font-medium text-right">Subtotal</th>
+                    <th className="px-4 py-2 font-medium">OOS</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
                   {order.items.map((item) => (
-                    <tr key={item.id}>
+                    <tr key={item.id} className={item.isOos ? 'bg-amber-50/50' : ''}>
                       <td className="px-4 py-2">
-                        <p>{item.bookTitle}</p>
+                        <p>
+                          {item.bookTitle}
+                          {item.isOos && (
+                            <span className="ml-1.5 inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800">
+                              OOS
+                            </span>
+                          )}
+                        </p>
                         {(item.isbn || item.format) && (
                           <p className="text-xs text-muted-foreground">
                             {[item.format ? bookFormatLabels[item.format] ?? item.format : null, item.isbn].filter(Boolean).join(' · ')}
@@ -152,6 +161,14 @@ export default async function OrderDetailPage({
                       <td className="px-4 py-2 text-right">{formatCurrency(item.discount.toString())}</td>
                       <td className="px-4 py-2 text-right font-medium">
                         {formatCurrency(item.subtotal.toString())}
+                      </td>
+                      <td className="px-4 py-2">
+                        <OosItemActions
+                          itemId={item.id}
+                          isOos={item.isOos}
+                          isResolved={!!item.oosResolution}
+                          resolution={item.oosResolution}
+                        />
                       </td>
                     </tr>
                   ))}

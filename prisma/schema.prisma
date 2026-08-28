@@ -75,6 +75,11 @@ enum DpType {
   FIXED_TOTAL     // dpValue = flat rupiah amount for the whole order
 }
 
+enum OosResolution {
+  REFUND    // money physically returned to customer — logged, not a deposit ledger entry
+  DEPOSIT   // amount added to the customer's deposit balance
+}
+
 enum PaymentMethod {
   QRIS
   BANK_TRANSFER
@@ -226,6 +231,7 @@ model PurchaseBatch {
   type                OrderType
   poMonth             String?
   etaMonth            String?
+  isOpen              Boolean     @default(true) // closed batches don't show up when picking a batch for a new order
   batchDate           DateTime    @default(now())
   expectedArrivalDate DateTime?
   notes               String?
@@ -333,6 +339,17 @@ model OrderItem {
 
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+
+  // OOS handling — flagged when a book didn't come in with the shipment.
+  // Resolution is REFUND (money physically returned, just logged — never
+  // touches the deposit ledger) or DEPOSIT (amount added to the customer's
+  // deposit balance). Resolving reduces the order's total going forward,
+  // but never edits an already-issued invoice's face amount.
+  isOos          Boolean         @default(false)
+  oosMarkedAt    DateTime?
+  oosResolution  OosResolution?
+  oosResolvedAt  DateTime?
+  oosNotes       String?
 
   @@index([orderId])
   @@map("order_items")

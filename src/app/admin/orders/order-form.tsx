@@ -31,6 +31,14 @@ type Book = {
   format: string | null;
 };
 type Supplier = { id: string; name: string };
+type OpenBatch = {
+  id: string;
+  name: string;
+  type: string;
+  poMonth: string | null;
+  etaMonth: string | null;
+  supplierId: string | null;
+};
 
 type ItemRow = {
   key: string;
@@ -93,11 +101,13 @@ export function OrderForm({
   customers,
   books,
   suppliers,
+  openBatches,
   order,
 }: {
   customers: Customer[];
   books: Book[];
   suppliers: Supplier[];
+  openBatches: OpenBatch[];
   order?: ExistingOrder;
 }) {
   const router = useRouter();
@@ -122,6 +132,7 @@ export function OrderForm({
     order?.dpValue !== undefined && order?.dpValue !== null ? String(toNumber(order.dpValue as any)) : '25'
   );
   const [newBatchName, setNewBatchName] = useState('');
+  const [existingBatchId, setExistingBatchId] = useState((order as any)?.poBatchId ?? '');
   const [orderDate, setOrderDate] = useState(
     toDateInputValue(order?.orderDate) || new Date().toISOString().slice(0, 10)
   );
@@ -212,6 +223,27 @@ export function OrderForm({
     () => suppliers.map((s) => ({ value: s.id, label: s.name })),
     [suppliers]
   );
+  const batchOptions = useMemo(
+    () =>
+      openBatches
+        .filter((b) => b.type === orderType)
+        .map((b) => ({
+          value: b.id,
+          label: b.name,
+          sublabel: [b.poMonth, b.etaMonth ? `ETA ${b.etaMonth}` : null].filter(Boolean).join(' · '),
+        })),
+    [openBatches, orderType]
+  );
+
+  function handleBatchSelect(batchId: string) {
+    setExistingBatchId(batchId);
+    if (!batchId) return;
+    const batch = openBatches.find((b) => b.id === batchId);
+    if (!batch) return;
+    if (batch.poMonth) setPoMonth(batch.poMonth);
+    if (batch.etaMonth) setEtaMonth(batch.etaMonth);
+    if (batch.supplierId) setSupplierId(batch.supplierId);
+  }
   const bookOptions = useMemo(
     () =>
       books.map((b) => ({
@@ -292,6 +324,7 @@ export function OrderForm({
       dpType: needsPoMonth ? dpType : undefined,
       dpValue: needsPoMonth ? Number(dpValue) : undefined,
       newBatchName: needsPoMonth ? newBatchName || undefined : undefined,
+      existingBatchId: needsPoMonth ? existingBatchId || undefined : undefined,
       orderDate,
       expectedArrivalDate: expectedArrivalDate || undefined,
       actualArrivalDate: actualArrivalDate || undefined,
@@ -430,6 +463,17 @@ export function OrderForm({
 
           {needsPoMonth && (
             <>
+              <div className="space-y-1.5 sm:col-span-2">
+                <Label htmlFor="existingBatchId">PO batch</Label>
+                <SearchableSelect
+                  id="existingBatchId"
+                  options={batchOptions}
+                  value={existingBatchId}
+                  onChange={handleBatchSelect}
+                  placeholder="Pilih PO batch yang masih open…"
+                  emptyLabel="— Batch baru (isi manual di bawah) —"
+                />
+              </div>
               <div className="space-y-1.5">
                 <Label htmlFor="poMonth">PO month</Label>
                 <Input
@@ -437,6 +481,7 @@ export function OrderForm({
                   type="month"
                   value={poMonth}
                   onChange={(e) => setPoMonth(e.target.value)}
+                  disabled={!!existingBatchId}
                   required
                 />
               </div>
@@ -447,6 +492,7 @@ export function OrderForm({
                   type="month"
                   value={etaMonth}
                   onChange={(e) => setEtaMonth(e.target.value)}
+                  disabled={!!existingBatchId}
                 />
               </div>
               <div className="space-y-1.5">
@@ -458,6 +504,7 @@ export function OrderForm({
                   onChange={setSupplierId}
                   placeholder="Cari supplier…"
                   emptyLabel="— No supplier —"
+                  disabled={!!existingBatchId}
                 />
               </div>
               <div className="space-y-1.5">
@@ -482,19 +529,23 @@ export function OrderForm({
                   required
                 />
               </div>
-              <div className="space-y-1.5 sm:col-span-2">
-                <Label htmlFor="newBatchName">Nama PO batch (kalau ini batch baru)</Label>
-                <Input
-                  id="newBatchName"
-                  value={newBatchName}
-                  onChange={(e) => setNewBatchName(e.target.value)}
-                  placeholder="Kosongin aja kalau gak yakin — nama otomatis dibikin"
-                />
-              </div>
+              {!existingBatchId && (
+                <div className="space-y-1.5 sm:col-span-2">
+                  <Label htmlFor="newBatchName">Nama PO batch baru</Label>
+                  <Input
+                    id="newBatchName"
+                    value={newBatchName}
+                    onChange={(e) => setNewBatchName(e.target.value)}
+                    placeholder="Kosongin aja kalau gak yakin — nama otomatis dibikin"
+                  />
+                </div>
+              )}
               <div className="rounded-md border border-border bg-secondary/50 p-3 text-xs text-muted-foreground sm:col-span-2">
-                PO batch otomatis kepilih/kebikin sendiri berdasarkan order type + PO month +
-                supplier. Customer, PO month, order type, dan supplier yang sama dengan order
-                terbuka lain akan otomatis gabung ke invoice yang sama juga.
+                {existingBatchId
+                  ? 'PO month, ETA, dan supplier ke-isi otomatis dari batch yang dipilih.'
+                  : 'Belum ada batch yang cocok — isi manual, batch baru otomatis dibikin dari data ini.'}{' '}
+                Customer, PO month, order type, dan supplier yang sama dengan order terbuka lain
+                akan otomatis gabung ke invoice yang sama juga.
               </div>
             </>
           )}
@@ -521,7 +572,7 @@ export function OrderForm({
             />
           </div>
 
-            <div className="space-y-1.5">
+          <div className="space-y-1.5">
             <Label htmlFor="expectedArrivalDate">Expected warehouse arrival</Label>
             <Input
               id="expectedArrivalDate"
@@ -530,7 +581,6 @@ export function OrderForm({
               onChange={(e) => setExpectedArrivalDate(e.target.value)}
             />
           </div>
-
 
           <div className="space-y-1.5">
             <Label htmlFor="actualArrivalDate">Actual arrival date</Label>

@@ -28,6 +28,7 @@ export type SaveOrderInput = {
   dpType?: string;
   dpValue?: number;
   newBatchName?: string;
+  existingBatchId?: string;
   orderDate: string;
   expectedArrivalDate?: string;
   actualArrivalDate?: string;
@@ -126,7 +127,8 @@ export async function saveOrder(input: SaveOrderInput): Promise<SaveOrderResult>
         );
 
         const resolvedPoBatchId = isMergeableOrderType(data.orderType)
-          ? await findOrCreatePurchaseBatch(
+          ? data.existingBatchId ||
+            (await findOrCreatePurchaseBatch(
               tx,
               {
                 orderType: data.orderType,
@@ -135,7 +137,7 @@ export async function saveOrder(input: SaveOrderInput): Promise<SaveOrderResult>
                 supplierId: data.supplierId || null,
               },
               data.newBatchName
-            )
+            ))
           : null;
 
         return tx.order.update({
@@ -283,7 +285,8 @@ export async function saveOrder(input: SaveOrderInput): Promise<SaveOrderResult>
       );
 
       const resolvedPoBatchId = isMergeableOrderType(data.orderType)
-        ? await findOrCreatePurchaseBatch(
+        ? data.existingBatchId ||
+          (await findOrCreatePurchaseBatch(
             tx,
             {
               orderType: data.orderType,
@@ -292,7 +295,7 @@ export async function saveOrder(input: SaveOrderInput): Promise<SaveOrderResult>
               supplierId: data.supplierId || null,
             },
             data.newBatchName
-          )
+          ))
         : null;
 
       return tx.order.create({

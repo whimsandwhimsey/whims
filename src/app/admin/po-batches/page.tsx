@@ -36,8 +36,17 @@ export default async function PoBatchesPage() {
         {batches.map((b) => (
           <Link key={b.id} href={`/admin/po-batches/${b.id}`}>
             <Card className="p-4">
-              <div className="flex items-center justify-between">
-                <p className="font-medium">{b.name}</p>
+              <div className="flex items-center justify-between gap-2">
+                <p className="font-medium">
+                  {b.name}
+                  <span
+                    className={`ml-2 inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium align-middle ${
+                      b.isOpen ? 'bg-success/15 text-success' : 'bg-muted text-muted-foreground'
+                    }`}
+                  >
+                    {b.isOpen ? 'Open' : 'Closed'}
+                  </span>
+                </p>
                 <p className="text-sm text-muted-foreground">{b._count.orders} order(s)</p>
               </div>
               <p className="text-xs text-muted-foreground">

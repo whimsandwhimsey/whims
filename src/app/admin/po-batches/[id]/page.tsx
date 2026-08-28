@@ -7,9 +7,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DeleteButton } from '@/components/delete-button';
 import { OrderStatusBadge, PaymentStatusBadge } from '@/components/status-badges';
 import { formatCurrency, formatDate } from '@/lib/utils';
-import { deletePoBatch } from '../actions';
+import { deletePoBatch, togglePoBatchOpen } from '../actions';
 import { GenerateInvoicesButton } from '../generate-invoices-button';
 import { BatchStatusChanger } from '../batch-status-changer';
+import { Download } from 'lucide-react';
 
 const TYPE_LABELS: Record<string, string> = {
   PO_REGULAR: 'PO Reguler',
@@ -46,7 +47,22 @@ export default async function PoBatchDetailPage({ params }: { params: { id: stri
         >
           <ArrowLeft className="h-4 w-4" /> Back to PO batches
         </Link>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" size="sm" asChild>
+            <a href={`/api/export/po-batch/${batch.id}`} download>
+              <Download className="h-4 w-4" /> Export
+            </a>
+          </Button>
+          <form action={togglePoBatchOpen.bind(null, batch.id, !batch.isOpen)}>
+            <Button
+              type="submit"
+              variant="outline"
+              size="sm"
+              className={batch.isOpen ? '' : 'border-success/40 text-success'}
+            >
+              {batch.isOpen ? 'Close batch' : 'Reopen batch'}
+            </Button>
+          </form>
           <Button variant="outline" size="sm" asChild>
             <Link href={`/admin/po-batches/${batch.id}/edit`}>
               <Pencil className="h-4 w-4" /> Edit
@@ -60,7 +76,16 @@ export default async function PoBatchDetailPage({ params }: { params: { id: stri
       </div>
 
       <div className="mb-6">
-        <h1 className="font-display text-2xl font-semibold text-primary">{batch.name}</h1>
+        <h1 className="font-display text-2xl font-semibold text-primary">
+          {batch.name}
+          <span
+            className={`ml-2 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium align-middle ${
+              batch.isOpen ? 'bg-success/15 text-success' : 'bg-muted text-muted-foreground'
+            }`}
+          >
+            {batch.isOpen ? 'Open' : 'Closed'}
+          </span>
+        </h1>
         <p className="text-sm text-muted-foreground">
           {TYPE_LABELS[batch.type]} · Opened {formatDate(batch.batchDate)}
           {batch.expectedArrivalDate ? ` · Expected ${formatDate(batch.expectedArrivalDate)}` : ''}

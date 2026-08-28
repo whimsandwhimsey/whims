@@ -104,8 +104,6 @@ export function InvoiceDocument({ data, id }: { data: InvoiceDocumentData; id?: 
 
       <div className="mb-6 space-y-1.5 text-sm">
         <Row label="Order total" value={formatCurrency(data.order.totalAmount)} />
-        <Row label="Paid so far" value={formatCurrency(data.order.amountPaid)} />
-        <Row label="Outstanding" value={formatCurrency(data.order.outstandingBalance)} />
         <div className="my-2 border-t border-border" />
         <Row label={`This invoice (${TYPE_LABELS[data.type]})`} value={formatCurrency(data.amount)} bold />
       </div>

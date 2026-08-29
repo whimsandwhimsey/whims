@@ -34,6 +34,13 @@ enum Courier {
   LION
   OJEK
   SHOPEE
+  JNE
+  JNT
+  SICEPAT
+  ANTERAJA
+  WAHANA
+  NINJA
+  IDEXPRESS
 }
 
 enum ExpenseCategory {
@@ -148,6 +155,7 @@ model Customer {
   name      String
   phone     String
   address   String?
+  postalCode String?  // extracted from address where possible; needed for Biteship rate lookups
   notes     String?
   status    CustomerStatus @default(ACTIVE)
   createdAt DateTime @default(now())

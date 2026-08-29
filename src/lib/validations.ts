@@ -8,6 +8,7 @@ export const customerSchema = z.object({
     .max(20)
     .regex(/^[\d+\s-]+$/, 'Only digits, spaces, + and - are allowed'),
   address: z.string().max(500).optional().or(z.literal('')),
+  postalCode: z.string().regex(/^\d{5}$/, 'Kode pos harus 5 digit').optional().or(z.literal('')),
   notes: z.string().max(1000).optional().or(z.literal('')),
 });
 export type CustomerFormValues = z.infer<typeof customerSchema>;
@@ -67,7 +68,18 @@ export const orderStatusValues = [
   'CANCELLED',
 ] as const;
 
-export const courierValues = ['LION', 'OJEK', 'SHOPEE'] as const;
+export const courierValues = [
+  'LION',
+  'OJEK',
+  'SHOPEE',
+  'JNE',
+  'JNT',
+  'SICEPAT',
+  'ANTERAJA',
+  'WAHANA',
+  'NINJA',
+  'IDEXPRESS',
+] as const;
 
 export const orderTypeValues = ['READY_STOCK', 'EVENT_JASTIP', 'PO_REGULAR', 'PO_REMAINDER'] as const;
 export const orderTypeLabels: Record<string, string> = {

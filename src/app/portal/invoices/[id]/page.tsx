@@ -65,7 +65,7 @@ export default async function PortalInvoiceDetailPage({ params }: { params: { id
 
       <InvoiceActions data={data} targetElementId="invoice-capture-target" />
 
-      <div className="mx-auto mt-4 max-w-md">
+      <div id="bayar" className="mx-auto mt-4 max-w-md">
         <PayInvoiceForm
           invoiceId={invoice.id}
           invoiceNumber={invoice.invoiceNumber}

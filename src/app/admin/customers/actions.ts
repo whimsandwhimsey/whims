@@ -19,6 +19,7 @@ function parseCustomerForm(formData: FormData) {
     name: formData.get('name'),
     phone: formData.get('phone'),
     address: formData.get('address') ?? '',
+    postalCode: formData.get('postalCode') ?? '',
     notes: formData.get('notes') ?? '',
   });
 }

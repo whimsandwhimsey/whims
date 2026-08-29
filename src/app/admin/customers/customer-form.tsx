@@ -12,6 +12,7 @@ type Customer = {
   name: string;
   phone: string;
   address: string | null;
+  postalCode: string | null;
   notes: string | null;
 };
 
@@ -42,6 +43,19 @@ export function CustomerForm({
         <Label htmlFor="address">Address</Label>
         <Textarea id="address" name="address" defaultValue={customer?.address ?? ''} rows={3} />
         <FieldError errors={state?.errors?.address} />
+      </div>
+
+      <div className="space-y-1.5">
+        <Label htmlFor="postalCode">Kode pos</Label>
+        <Input
+          id="postalCode"
+          name="postalCode"
+          defaultValue={customer?.postalCode ?? ''}
+          placeholder="5 digit, buat hitung ongkir"
+          maxLength={5}
+          className="max-w-[140px]"
+        />
+        <FieldError errors={state?.errors?.postalCode} />
       </div>
 
       <div className="space-y-1.5">

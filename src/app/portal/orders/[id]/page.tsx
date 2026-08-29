@@ -4,8 +4,10 @@ import { ArrowLeft } from 'lucide-react';
 import { prisma } from '@/lib/prisma';
 import { getAuthSession } from '@/lib/session';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { OrderStatusBadge, PaymentStatusBadge } from '@/components/status-badges';
 import { formatCurrency, formatDate } from '@/lib/utils';
+import { toNumber } from '@/lib/calculations';
 import { getPackingQueuePosition } from '@/lib/packing-queue';
 import { bookFormatLabels } from '@/lib/validations';
 
@@ -19,6 +21,13 @@ const COURIER_LABELS: Record<string, string> = {
   LION: 'Lion Parcel',
   OJEK: 'Ojek (Gojek/Grab)',
   SHOPEE: 'Shopee Express',
+  JNE: 'JNE',
+  JNT: 'J&T Express',
+  SICEPAT: 'SiCepat',
+  ANTERAJA: 'AnterAja',
+  WAHANA: 'Wahana',
+  NINJA: 'Ninja Xpress',
+  IDEXPRESS: 'ID Express',
 };
 
 export default async function PortalOrderDetailPage({ params }: { params: { id: string } }) {
@@ -31,6 +40,7 @@ export default async function PortalOrderDetailPage({ params }: { params: { id: 
       items: { include: { book: true } },
       payments: { orderBy: { date: 'desc' } },
       invoices: { orderBy: { issuedAt: 'desc' } },
+      poBatch: { select: { name: true } },
     },
   });
 
@@ -50,7 +60,12 @@ export default async function PortalOrderDetailPage({ params }: { params: { id: 
         </Link>
 
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-          <h1 className="font-display text-2xl font-semibold text-primary">{order.orderNumber}</h1>
+          <div>
+            <h1 className="font-display text-2xl font-semibold text-primary">
+              {order.poBatch?.name ?? order.orderNumber}
+            </h1>
+            {order.poBatch && <p className="text-sm text-muted-foreground">{order.orderNumber}</p>}
+          </div>
           <div className="flex items-center gap-2">
             <PaymentStatusBadge status={order.paymentStatus} />
             <OrderStatusBadge status={order.status} />
@@ -188,16 +203,21 @@ export default async function PortalOrderDetailPage({ params }: { params: { id: 
               ) : (
                 <ul className="divide-y divide-border">
                   {order.invoices.map((inv) => (
-                    <li key={inv.id}>
-                      <Link
-                        href={`/portal/invoices/${inv.id}`}
-                        className="flex items-center justify-between gap-3 py-2 text-sm hover:text-primary"
-                      >
+                    <li key={inv.id} className="flex items-center justify-between gap-3 py-2">
+                      <Link href={`/portal/invoices/${inv.id}`} className="text-sm hover:text-primary">
                         <span>
                           {inv.invoiceNumber} · {INVOICE_TYPE_LABELS[inv.type] ?? inv.type}
                         </span>
-                        <span className="font-medium">{formatCurrency(inv.amount.toString())}</span>
+                        <span className="ml-2 font-medium">{formatCurrency(inv.amount.toString())}</span>
                       </Link>
+                      <div className="flex items-center gap-2">
+                        <PaymentStatusBadge status={inv.paymentStatus} />
+                        {toNumber(inv.outstandingBalance) > 0 && (
+                          <Button size="sm" asChild>
+                            <Link href={`/portal/invoices/${inv.id}#bayar`}>Bayar</Link>
+                          </Button>
+                        )}
+                      </div>
                     </li>
                   ))}
                 </ul>

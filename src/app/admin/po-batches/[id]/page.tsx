@@ -31,12 +31,29 @@ export default async function PoBatchDetailPage({ params }: { params: { id: stri
     where: { id: params.id },
     include: {
       orders: {
-        include: { customer: true },
+        include: { customer: true, items: true },
         orderBy: { orderDate: 'desc' },
       },
     },
   });
   if (!batch) notFound();
+
+  const bookSummary = new Map<string, { title: string; quantity: number; subtotal: number }>();
+  for (const o of batch.orders) {
+    for (const it of o.items) {
+      const key = it.isbn || it.bookTitle;
+      const existing = bookSummary.get(key);
+      const subtotal = Number(it.subtotal.toString());
+      if (existing) {
+        existing.quantity += it.quantity;
+        existing.subtotal += subtotal;
+      } else {
+        bookSummary.set(key, { title: it.bookTitle, quantity: it.quantity, subtotal });
+      }
+    }
+  }
+  const bookRows = [...bookSummary.values()].sort((a, b) => a.title.localeCompare(b.title));
+  const totalBookQuantity = bookRows.reduce((sum, r) => sum + r.quantity, 0);
 
   return (
     <div className="p-4 sm:p-6">
@@ -93,6 +110,38 @@ export default async function PoBatchDetailPage({ params }: { params: { id: stri
         <p className="mt-1 text-sm text-brass">Invoice rule: {TYPE_RULE[batch.type]}</p>
         {batch.notes && <p className="mt-2 text-sm text-muted-foreground">{batch.notes}</p>}
       </div>
+
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle className="text-base">
+            Ringkasan buku ({bookRows.length} judul, {totalBookQuantity} eksemplar)
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          {bookRows.length === 0 ? (
+            <p className="p-4 text-sm text-muted-foreground">Belum ada item.</p>
+          ) : (
+            <table className="w-full text-sm">
+              <thead className="bg-secondary text-left text-xs uppercase tracking-wide text-muted-foreground">
+                <tr>
+                  <th className="px-4 py-2 font-medium">Judul</th>
+                  <th className="px-4 py-2 text-right font-medium">Qty</th>
+                  <th className="px-4 py-2 text-right font-medium">Subtotal</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {bookRows.map((r, idx) => (
+                  <tr key={idx}>
+                    <td className="px-4 py-2">{r.title}</td>
+                    <td className="px-4 py-2 text-right">{r.quantity}</td>
+                    <td className="px-4 py-2 text-right">{formatCurrency(r.subtotal)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </CardContent>
+      </Card>
 
       <Card className="mb-6">
         <CardHeader>

@@ -164,9 +164,9 @@ export default async function PortalDashboardPage({
                   >
                     <div className="mb-1.5 flex flex-wrap items-start justify-between gap-2">
                       <div>
-                        <p className="text-sm font-medium">{o.orderNumber}</p>
+                        <p className="text-sm font-medium">{o.poBatch?.name ?? o.orderNumber}</p>
                         <p className="text-xs text-muted-foreground">
-                          {o.poBatch?.name ?? 'No batch'}
+                          {o.poBatch ? o.orderNumber : 'No batch'}
                           {o.expectedArrivalDate ? ` · ETA ${formatDate(o.expectedArrivalDate)}` : ''}
                         </p>
                       </div>

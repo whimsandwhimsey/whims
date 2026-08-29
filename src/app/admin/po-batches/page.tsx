@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { formatDate } from '@/lib/utils';
 import { MultiSelectFilter } from '@/components/multi-select-filter';
+import { SortSelect } from '@/components/sort-select';
 
 const TYPE_LABELS: Record<string, string> = {
   PO_REGULAR: 'PO Reguler',
@@ -31,7 +32,7 @@ export default async function PoBatchesPage({
 }: {
   searchParams: { sort?: string; paymentStatus?: string; invoiceStatus?: string };
 }) {
-  const sort = searchParams.sort === 'name' ? 'name' : 'recent';
+  const sort = searchParams.sort === 'name_asc' || searchParams.sort === 'name_desc' ? searchParams.sort : 'recent';
   const paymentStatuses = (searchParams.paymentStatus ?? '').split(',').filter(Boolean);
   const invoiceStatuses = (searchParams.invoiceStatus ?? '').split(',').filter(Boolean);
 
@@ -63,9 +64,11 @@ export default async function PoBatchesPage({
       return invoiceStatuses.some((s) => statuses.has(s));
     });
   }
-  batches = [...batches].sort((a, b) =>
-    sort === 'name' ? a.name.localeCompare(b.name) : b.batchDate.getTime() - a.batchDate.getTime()
-  );
+  batches = [...batches].sort((a, b) => {
+    if (sort === 'name_asc') return a.name.localeCompare(b.name);
+    if (sort === 'name_desc') return b.name.localeCompare(a.name);
+    return b.batchDate.getTime() - a.batchDate.getTime();
+  });
 
   return (
     <div className="p-4 sm:p-6">
@@ -92,18 +95,14 @@ export default async function PoBatchesPage({
           label="Invoice"
           options={Object.entries(INVOICE_STATUS_LABELS).map(([value, label]) => ({ value, label }))}
         />
-        <Link
-          href={(() => {
-            const p = new URLSearchParams();
-            if (paymentStatuses.length) p.set('paymentStatus', paymentStatuses.join(','));
-            if (invoiceStatuses.length) p.set('invoiceStatus', invoiceStatuses.join(','));
-            if (sort === 'recent') p.set('sort', 'name');
-            return `/admin/po-batches?${p.toString()}`;
-          })()}
-          className="flex h-10 items-center gap-1.5 rounded-md border border-input bg-background px-3 py-2 text-sm text-muted-foreground hover:text-foreground"
-        >
-          {sort === 'recent' ? 'Terbaru dulu' : 'Nama (A-Z)'}
-        </Link>
+        <SortSelect
+          defaultValue="recent"
+          options={[
+            { value: 'recent', label: 'Terbaru dulu' },
+            { value: 'name_asc', label: 'Nama (A-Z)' },
+            { value: 'name_desc', label: 'Nama (Z-A)' },
+          ]}
+        />
       </div>
 
       <div className="space-y-2">

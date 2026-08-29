@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Printer, Download, Share2, MessageCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { formatCurrency, formatDate } from '@/lib/utils';
+import { formatCurrency } from '@/lib/utils';
 import type { InvoiceDocumentData } from '@/components/invoice-document';
 import { markInvoiceSent } from '@/app/admin/invoices/actions';
 
@@ -19,24 +19,12 @@ function firstName(fullName: string): string {
 
 function buildWhatsAppText(data: InvoiceDocumentData): string {
   const lines = [
-    `Hi, kak ${firstName(data.customer.name)}! Makasih banyak udah belanja di Whims & Whimsey 📚`,
+    `Hi kak ${firstName(data.customer.name)}, ini invoice ${TYPE_LABELS[data.type]} buat order ${data.order.orderNumber} ya 📚`,
     '',
-    `Ini invoice untuk pesanan kamu (${TYPE_LABELS[data.type]}):`,
-    `Invoice: ${data.invoiceNumber}`,
-    `Order: ${data.order.orderNumber} (${formatDate(data.order.orderDate)})`,
+    `Tagihan: ${formatCurrency(data.amount)}`,
+    'Detail item & QRIS pembayaran ada di gambar invoice-nya.',
     '',
-    ...data.order.items.map(
-      (item) => `• ${item.bookTitle} x${item.quantity} — ${formatCurrency(item.subtotal)}`
-    ),
-    '',
-    `Total pesanan: ${formatCurrency(data.order.totalAmount)}`,
-    `Sudah dibayar: ${formatCurrency(data.order.amountPaid)}`,
-    `Sisa tagihan: ${formatCurrency(data.order.outstandingBalance)}`,
-    `Tagihan invoice ini (${TYPE_LABELS[data.type]}): ${formatCurrency(data.amount)}`,
-    '',
-    'Pembayaran bisa via QRIS (kode QRIS menyusul ya, kak 🙏).',
-    '',
-    'Kalau ada pertanyaan soal invoice ini, langsung balas chat ini aja ya. Makasih banyak! 🐈‍⬛',
+    'Ada pertanyaan, langsung balas chat ini aja. Makasih! 🐈‍⬛',
   ];
   return lines.join('\n');
 }

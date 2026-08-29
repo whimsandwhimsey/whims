@@ -6,6 +6,7 @@ import { Card } from '@/components/ui/card';
 import { SearchBox } from '@/components/search-box';
 import { Pagination } from '@/components/pagination';
 import { MultiSelectFilter } from '@/components/multi-select-filter';
+import { SortSelect } from '@/components/sort-select';
 import { orderStatusValues, orderTypeValues, orderTypeLabels } from '@/lib/validations';
 import { OrdersList } from './orders-list';
 
@@ -52,7 +53,7 @@ export default async function OrdersPage({
   const supplierIds = (searchParams.supplier ?? '').split(',').filter(Boolean);
   const poMonths = (searchParams.poMonth ?? '').split(',').filter(Boolean);
   const publisherIds = (searchParams.publisher ?? '').split(',').filter(Boolean);
-  const sort = searchParams.sort === 'oldest' ? 'oldest' : 'newest';
+  const sort = ['oldest', 'name_asc', 'name_desc'].includes(searchParams.sort ?? '') ? searchParams.sort! : 'newest';
   const page = Math.max(1, parseInt(searchParams.page ?? '1', 10) || 1);
 
   const where: Record<string, unknown> = {};
@@ -78,7 +79,12 @@ export default async function OrdersPage({
   const [orders, total, poBatches, suppliers, publishers, poMonthRows] = await Promise.all([
     prisma.order.findMany({
       where,
-      orderBy: { orderDate: sort === 'oldest' ? 'asc' : 'desc' },
+      orderBy:
+        sort === 'name_asc'
+          ? { customer: { name: 'asc' } }
+          : sort === 'name_desc'
+            ? { customer: { name: 'desc' } }
+            : { orderDate: sort === 'oldest' ? 'asc' : 'desc' },
       skip: (page - 1) * PAGE_SIZE,
       take: PAGE_SIZE,
       include: {
@@ -190,18 +196,15 @@ export default async function OrdersPage({
           label="PO Batch"
           options={poBatches.map((b) => ({ value: b.id, label: b.name }))}
         />
-        <Link
-          href={(() => {
-            const p = new URLSearchParams(exportParams);
-            p.delete('page');
-            if (sort === 'newest') p.set('sort', 'oldest');
-            else p.delete('sort');
-            return `/admin/orders?${p.toString()}`;
-          })()}
-          className="flex h-10 items-center gap-1.5 rounded-md border border-input bg-background px-3 py-2 text-sm text-muted-foreground hover:text-foreground"
-        >
-          {sort === 'newest' ? 'Terbaru dulu' : 'Terlama dulu'}
-        </Link>
+        <SortSelect
+          defaultValue="newest"
+          options={[
+            { value: 'newest', label: 'Terbaru dulu' },
+            { value: 'oldest', label: 'Terlama dulu' },
+            { value: 'name_asc', label: 'Customer (A-Z)' },
+            { value: 'name_desc', label: 'Customer (Z-A)' },
+          ]}
+        />
       </div>
 
       <Card className="overflow-hidden">

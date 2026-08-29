@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Inter, Baloo_2 } from 'next/font/google';
 import { Providers } from '@/components/providers';
 import './globals.css';
@@ -13,6 +13,12 @@ const baloo = Baloo_2({
 export const metadata: Metadata = {
   title: 'Whims & Whimsey — Order Management',
   description: 'Order, payment, and deposit management for Whims & Whimsey bookstore.',
+};
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

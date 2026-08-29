@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { requireStaffSession } from '@/lib/guards';
 import { writeAuditLog } from '@/lib/audit';
 import { getCustomerDepositBalance } from '@/lib/deposit';
+import { recalculateInvoiceFinancials } from '@/lib/invoice-calculations';
 
 export async function confirmTopUpRequest(id: string) {
   const session = await requireStaffSession();
@@ -120,6 +121,79 @@ export async function rejectAddressChange(id: string) {
     entityType: 'AddressChangeRequest',
     entityId: id,
     summary: `Rejected address change request from ${request.customer.name}`,
+  });
+
+  revalidatePath('/admin/requests');
+}
+
+/**
+ * Confirms a customer's "I paid this invoice" claim — creates the real
+ * Payment against that invoice (same as the admin manually recording a
+ * payment would), then recalculates the invoice/order's paid/outstanding
+ * from scratch. Any amount beyond what the invoice still owes automatically
+ * becomes deposit, exactly like a manually-recorded payment.
+ */
+export async function confirmInvoicePaymentRequest(id: string) {
+  const session = await requireStaffSession();
+
+  const request = await prisma.invoicePaymentRequest.findUnique({
+    where: { id },
+    include: { customer: true, invoice: { include: { order: true } } },
+  });
+  if (!request) throw new Error('Request not found.');
+  if (request.status !== 'PENDING') throw new Error('This request has already been handled.');
+
+  const amount = Number(request.amount.toString());
+
+  await prisma.payment.create({
+    data: {
+      customerId: request.customerId,
+      orderId: request.invoice.orderId,
+      invoiceId: request.invoiceId,
+      date: new Date(),
+      amount,
+      method: 'QRIS',
+      notes: `Customer self-service invoice payment (confirmed via WhatsApp) — invoice ${request.invoice.invoiceNumber}`,
+      recordedById: session.user.id,
+    },
+  });
+
+  await recalculateInvoiceFinancials(request.invoiceId);
+
+  await prisma.invoicePaymentRequest.update({
+    where: { id },
+    data: { status: 'CONFIRMED', confirmedAt: new Date(), confirmedById: session.user.id },
+  });
+
+  await writeAuditLog({
+    userId: session.user.id,
+    action: 'UPDATE',
+    entityType: 'InvoicePaymentRequest',
+    entityId: id,
+    summary: `Confirmed payment of ${amount} for invoice ${request.invoice.invoiceNumber} from ${request.customer.name}`,
+  });
+
+  revalidatePath('/admin/requests');
+  revalidatePath(`/admin/orders/${request.invoice.orderId}`);
+  revalidatePath(`/admin/invoices/${request.invoiceId}`);
+  revalidatePath(`/admin/customers/${request.customerId}`);
+  revalidatePath('/admin/payments');
+}
+
+export async function rejectInvoicePaymentRequest(id: string) {
+  const session = await requireStaffSession();
+  const request = await prisma.invoicePaymentRequest.update({
+    where: { id },
+    data: { status: 'REJECTED', confirmedAt: new Date(), confirmedById: session.user.id },
+    include: { customer: true, invoice: true },
+  });
+
+  await writeAuditLog({
+    userId: session.user.id,
+    action: 'UPDATE',
+    entityType: 'InvoicePaymentRequest',
+    entityId: id,
+    summary: `Rejected payment claim for invoice ${request.invoice.invoiceNumber} from ${request.customer.name}`,
   });
 
   revalidatePath('/admin/requests');

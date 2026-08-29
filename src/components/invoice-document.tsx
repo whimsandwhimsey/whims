@@ -65,7 +65,7 @@ export function InvoiceDocument({ data, id }: { data: InvoiceDocumentData; id?: 
           <p className="mb-1 text-xs uppercase tracking-wide text-muted-foreground">Bill to</p>
           <p className="font-medium">{data.customer.name}</p>
           <p className="text-xs text-muted-foreground">{data.customer.phone}</p>
-          {data.customer.address && !showAddressConfirm && (
+          {data.customer.address && data.type !== 'DEPOSIT' && !showAddressConfirm && (
             <p className="text-xs text-muted-foreground">{data.customer.address}</p>
           )}
         </div>
@@ -83,7 +83,12 @@ export function InvoiceDocument({ data, id }: { data: InvoiceDocumentData; id?: 
         </div>
       )}
 
-      <table className="mb-6 w-full text-xs sm:text-sm">
+      <table className="mb-6 w-full table-fixed text-xs sm:text-sm">
+        <colgroup>
+          <col />
+          <col style={{ width: '36px' }} />
+          <col style={{ width: '84px' }} />
+        </colgroup>
         <thead>
           <tr className="border-b border-border text-left text-muted-foreground">
             <th className="py-2 font-medium">Item</th>
@@ -93,10 +98,10 @@ export function InvoiceDocument({ data, id }: { data: InvoiceDocumentData; id?: 
         </thead>
         <tbody>
           {data.order.items.map((item, i) => (
-            <tr key={i} className="border-b border-border/60">
-              <td className="py-2 pr-2">{item.bookTitle}</td>
-              <td className="py-2 text-right">{item.quantity}</td>
-              <td className="py-2 text-right">{formatCurrency(item.subtotal)}</td>
+            <tr key={i} className="border-b border-border/60 align-top">
+              <td className="break-words py-2 pr-2">{item.bookTitle}</td>
+              <td className="whitespace-nowrap py-2 text-right">{item.quantity}</td>
+              <td className="whitespace-nowrap py-2 text-right">{formatCurrency(item.subtotal)}</td>
             </tr>
           ))}
         </tbody>
@@ -106,6 +111,15 @@ export function InvoiceDocument({ data, id }: { data: InvoiceDocumentData; id?: 
         <Row label="Order total" value={formatCurrency(data.order.totalAmount)} />
         <div className="my-2 border-t border-border" />
         <Row label={`This invoice (${TYPE_LABELS[data.type]})`} value={formatCurrency(data.amount)} bold />
+      </div>
+
+      <div className="mb-6 flex items-center justify-center gap-3 rounded-md border border-border p-3">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/qris.png" alt="QRIS" className="h-20 w-20 shrink-0" />
+        <div>
+          <p className="text-sm font-medium">Scan buat bayar {formatCurrency(data.amount)}</p>
+          <p className="text-xs text-muted-foreground">QRIS — semua e-wallet &amp; mobile banking</p>
+        </div>
       </div>
 
       <p className="text-center text-xs text-muted-foreground">

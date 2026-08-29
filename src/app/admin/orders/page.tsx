@@ -5,12 +5,9 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { SearchBox } from '@/components/search-box';
 import { Pagination } from '@/components/pagination';
-import { DeleteButton } from '@/components/delete-button';
 import { MultiSelectFilter } from '@/components/multi-select-filter';
-import { OrderStatusBadge, PaymentStatusBadge } from '@/components/status-badges';
-import { formatCurrency, formatDate } from '@/lib/utils';
 import { orderStatusValues, orderTypeValues, orderTypeLabels } from '@/lib/validations';
-import { deleteOrder } from './actions';
+import { OrdersList } from './orders-list';
 
 const PAGE_SIZE = 15;
 
@@ -43,6 +40,8 @@ export default async function OrdersPage({
     orderType?: string;
     supplier?: string;
     poMonth?: string;
+    publisher?: string;
+    sort?: string;
   };
 }) {
   const q = searchParams.q?.trim() ?? '';
@@ -52,6 +51,8 @@ export default async function OrdersPage({
   const orderTypes = (searchParams.orderType ?? '').split(',').filter(Boolean);
   const supplierIds = (searchParams.supplier ?? '').split(',').filter(Boolean);
   const poMonths = (searchParams.poMonth ?? '').split(',').filter(Boolean);
+  const publisherIds = (searchParams.publisher ?? '').split(',').filter(Boolean);
+  const sort = searchParams.sort === 'oldest' ? 'oldest' : 'newest';
   const page = Math.max(1, parseInt(searchParams.page ?? '1', 10) || 1);
 
   const where: Record<string, unknown> = {};
@@ -61,6 +62,9 @@ export default async function OrdersPage({
   if (orderTypes.length > 0) where.orderType = { in: orderTypes };
   if (supplierIds.length > 0) where.supplierId = { in: supplierIds };
   if (poMonths.length > 0) where.poMonth = { in: poMonths };
+  if (publisherIds.length > 0) {
+    where.items = { some: { book: { publisherId: { in: publisherIds } } } };
+  }
   if (q) {
     where.OR = [
       { orderNumber: { contains: q, mode: 'insensitive' } },
@@ -71,17 +75,24 @@ export default async function OrdersPage({
     ];
   }
 
-  const [orders, total, poBatches, suppliers, poMonthRows] = await Promise.all([
+  const [orders, total, poBatches, suppliers, publishers, poMonthRows] = await Promise.all([
     prisma.order.findMany({
       where,
-      orderBy: { orderDate: 'desc' },
+      orderBy: { orderDate: sort === 'oldest' ? 'asc' : 'desc' },
       skip: (page - 1) * PAGE_SIZE,
       take: PAGE_SIZE,
-      include: { customer: true, poBatch: { select: { id: true, name: true } }, supplier: true, items: true },
+      include: {
+        customer: true,
+        poBatch: { select: { id: true, name: true } },
+        supplier: true,
+        items: true,
+        invoices: { select: { id: true, sentAt: true } },
+      },
     }),
     prisma.order.count({ where }),
-    prisma.purchaseBatch.findMany({ orderBy: { batchDate: 'desc' }, select: { id: true, name: true } }),
+    prisma.purchaseBatch.findMany({ orderBy: { batchDate: 'desc' }, select: { id: true, name: true, type: true } }),
     prisma.supplier.findMany({ where: { isActive: true }, orderBy: { name: 'asc' }, select: { id: true, name: true } }),
+    prisma.publisher.findMany({ where: { isActive: true }, orderBy: { name: 'asc' }, select: { id: true, name: true } }),
     prisma.order.findMany({
       where: { poMonth: { not: null } },
       distinct: ['poMonth'],
@@ -89,6 +100,8 @@ export default async function OrdersPage({
       orderBy: { poMonth: 'desc' },
     }),
   ]);
+
+
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
@@ -101,6 +114,8 @@ export default async function OrdersPage({
     if (orderTypes.length) params.set('orderType', orderTypes.join(','));
     if (supplierIds.length) params.set('supplier', supplierIds.join(','));
     if (poMonths.length) params.set('poMonth', poMonths.join(','));
+    if (publisherIds.length) params.set('publisher', publisherIds.join(','));
+    if (sort !== 'newest') params.set('sort', sort);
     params.set('page', String(p));
     return `/admin/orders?${params.toString()}`;
   }
@@ -113,6 +128,7 @@ export default async function OrdersPage({
   if (orderTypes.length) exportParams.set('orderType', orderTypes.join(','));
   if (supplierIds.length) exportParams.set('supplier', supplierIds.join(','));
   if (poMonths.length) exportParams.set('poMonth', poMonths.join(','));
+  if (publisherIds.length) exportParams.set('publisher', publisherIds.join(','));
 
   return (
     <div className="p-6">
@@ -148,6 +164,11 @@ export default async function OrdersPage({
           options={suppliers.map((s) => ({ value: s.id, label: s.name }))}
         />
         <MultiSelectFilter
+          paramKey="publisher"
+          label="Publisher"
+          options={publishers.map((p) => ({ value: p.id, label: p.name }))}
+        />
+        <MultiSelectFilter
           paramKey="poMonth"
           label="Bulan PO"
           options={poMonthRows
@@ -169,125 +190,22 @@ export default async function OrdersPage({
           label="PO Batch"
           options={poBatches.map((b) => ({ value: b.id, label: b.name }))}
         />
+        <Link
+          href={(() => {
+            const p = new URLSearchParams(exportParams);
+            p.delete('page');
+            if (sort === 'newest') p.set('sort', 'oldest');
+            else p.delete('sort');
+            return `/admin/orders?${p.toString()}`;
+          })()}
+          className="flex h-10 items-center gap-1.5 rounded-md border border-input bg-background px-3 py-2 text-sm text-muted-foreground hover:text-foreground"
+        >
+          {sort === 'newest' ? 'Terbaru dulu' : 'Terlama dulu'}
+        </Link>
       </div>
 
       <Card className="overflow-hidden">
-        {/* Mobile: compact cards, no horizontal scroll */}
-        <div className="divide-y divide-border md:hidden">
-          {orders.map((o) => (
-            <Link
-              key={o.id}
-              href={`/admin/orders/${o.id}`}
-              className="block p-4 hover:bg-secondary/50"
-            >
-              <div className="mb-1 flex items-start justify-between gap-2">
-                <div>
-                  <p className="text-sm font-medium">
-                    {o.customer.name}
-                    <span className="ml-1 font-normal text-muted-foreground">
-                      ···{o.customer.phone.slice(-4)}
-                    </span>
-                  </p>
-                  <p className="text-xs text-muted-foreground">{o.orderNumber}</p>
-                </div>
-                <p className="text-sm font-medium">{formatCurrency(o.totalAmount.toString())}</p>
-              </div>
-              <p className="mb-1 text-xs text-foreground">
-                {o.items.map((it) => `${it.bookTitle}${it.quantity > 1 ? ` ×${it.quantity}` : ''}`).join(', ')}
-              </p>
-              <p className="mb-1.5 text-xs text-muted-foreground">
-                {[
-                  orderTypeLabels[o.orderType] ?? o.orderType,
-                  o.supplier?.name,
-                  o.poMonth ? `PO ${o.poMonth}${o.etaMonth ? ` · ETA ${o.etaMonth}` : ''}` : null,
-                ]
-                  .filter(Boolean)
-                  .join(' · ')}
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-                <PaymentStatusBadge status={o.paymentStatus} />
-                <OrderStatusBadge status={o.status} />
-              </div>
-            </Link>
-          ))}
-          {orders.length === 0 && (
-            <p className="px-4 py-10 text-center text-sm text-muted-foreground">No orders found.</p>
-          )}
-        </div>
-
-        {/* Desktop: full table */}
-        <div className="hidden overflow-x-auto md:block">
-          <table className="w-full text-sm">
-            <thead className="bg-secondary text-left text-xs uppercase tracking-wide text-muted-foreground">
-              <tr>
-                <th className="px-4 py-3 font-medium">Order #</th>
-                <th className="px-4 py-3 font-medium">Customer</th>
-                <th className="px-4 py-3 font-medium">Books</th>
-                <th className="px-4 py-3 font-medium">Type</th>
-                <th className="px-4 py-3 font-medium">Supplier</th>
-                <th className="px-4 py-3 font-medium">PO / ETA</th>
-                <th className="px-4 py-3 font-medium">Status</th>
-                <th className="px-4 py-3 font-medium">Payment</th>
-                <th className="px-4 py-3 font-medium text-right">Total</th>
-                <th className="px-4 py-3 font-medium"></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {orders.map((o) => (
-                <tr key={o.id} className="hover:bg-secondary/50">
-                  <td className="px-4 py-3">
-                    <Link href={`/admin/orders/${o.id}`} className="font-medium text-primary hover:underline">
-                      {o.orderNumber}
-                    </Link>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div>{o.customer.name}</div>
-                    <div className="text-xs text-muted-foreground">···{o.customer.phone.slice(-4)}</div>
-                  </td>
-                  <td className="px-4 py-3 max-w-[220px] truncate text-muted-foreground" title={o.items.map((it) => it.bookTitle).join(', ')}>
-                    {o.items.map((it) => `${it.bookTitle}${it.quantity > 1 ? ` ×${it.quantity}` : ''}`).join(', ')}
-                  </td>
-                  <td className="px-4 py-3 text-muted-foreground">{orderTypeLabels[o.orderType] ?? o.orderType}</td>
-                  <td className="px-4 py-3 text-muted-foreground">{o.supplier?.name ?? '—'}</td>
-                  <td className="px-4 py-3 text-muted-foreground">
-                    {o.poMonth ? (
-                      <span>
-                        PO {o.poMonth}
-                        {o.etaMonth ? ` · ETA ${o.etaMonth}` : ''}
-                      </span>
-                    ) : (
-                      formatDate(o.expectedArrivalDate)
-                    )}
-                  </td>
-                  <td className="px-4 py-3">
-                    <OrderStatusBadge status={o.status} />
-                  </td>
-                  <td className="px-4 py-3">
-                    <PaymentStatusBadge status={o.paymentStatus} />
-                  </td>
-                  <td className="px-4 py-3 text-right font-medium">
-                    {formatCurrency(o.totalAmount.toString())}
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex justify-end">
-                      <DeleteButton
-                        action={deleteOrder.bind(null, o.id)}
-                        confirmMessage={`Delete order ${o.orderNumber}? If it has payments/invoices on record, it'll be cancelled instead — otherwise it's removed permanently.`}
-                      />
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {orders.length === 0 && (
-                <tr>
-                  <td colSpan={10} className="px-4 py-10 text-center text-muted-foreground">
-                    No orders found.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+        <OrdersList orders={orders as any} poBatches={poBatches} />
         <Pagination page={page} totalPages={totalPages} buildHref={buildHref} />
       </Card>
     </div>

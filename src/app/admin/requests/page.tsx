@@ -7,10 +7,12 @@ import {
   rejectTopUpRequest,
   confirmAddressChange,
   rejectAddressChange,
+  confirmInvoicePaymentRequest,
+  rejectInvoicePaymentRequest,
 } from './actions';
 
 export default async function RequestsPage() {
-  const [topUps, addressChanges] = await Promise.all([
+  const [topUps, addressChanges, invoicePayments] = await Promise.all([
     prisma.topUpRequest.findMany({
       where: { status: 'PENDING' },
       orderBy: { createdAt: 'asc' },
@@ -20,6 +22,11 @@ export default async function RequestsPage() {
       where: { status: 'PENDING' },
       orderBy: { createdAt: 'asc' },
       include: { customer: true },
+    }),
+    prisma.invoicePaymentRequest.findMany({
+      where: { status: 'PENDING' },
+      orderBy: { createdAt: 'asc' },
+      include: { customer: true, invoice: { include: { order: true } } },
     }),
   ]);
 
@@ -32,7 +39,43 @@ export default async function RequestsPage() {
         </p>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-6 lg:grid-cols-3">
+        <Card>
+          <CardHeader>
+            <CardTitle>Invoice payment claims ({invoicePayments.length})</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {invoicePayments.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Nothing pending.</p>
+            ) : (
+              invoicePayments.map((r) => (
+                <div key={r.id} className="rounded-md border border-border p-3">
+                  <div className="mb-1 flex items-center justify-between">
+                    <p className="font-medium">{r.customer.name}</p>
+                    <p className="font-semibold text-success">{formatCurrency(r.amount.toString())}</p>
+                  </div>
+                  <p className="mb-3 text-xs text-muted-foreground">
+                    {r.invoice.invoiceNumber} · Order {r.invoice.order.orderNumber} · Requested{' '}
+                    {formatDate(r.createdAt)}
+                  </p>
+                  <div className="flex gap-2">
+                    <form action={confirmInvoicePaymentRequest.bind(null, r.id)} className="flex-1">
+                      <Button type="submit" size="sm" className="w-full">
+                        Confirm
+                      </Button>
+                    </form>
+                    <form action={rejectInvoicePaymentRequest.bind(null, r.id)} className="flex-1">
+                      <Button type="submit" variant="outline" size="sm" className="w-full">
+                        Reject
+                      </Button>
+                    </form>
+                  </div>
+                </div>
+              ))
+            )}
+          </CardContent>
+        </Card>
+
         <Card>
           <CardHeader>
             <CardTitle>Deposit top-up requests ({topUps.length})</CardTitle>

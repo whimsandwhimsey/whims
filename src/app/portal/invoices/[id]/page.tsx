@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { getAuthSession } from '@/lib/session';
 import { InvoiceDocument, type InvoiceDocumentData } from '@/components/invoice-document';
 import { InvoiceActions } from '@/components/invoice-actions';
+import { PayInvoiceForm } from './pay-invoice-form';
 import { toNumber } from '@/lib/calculations';
 
 export default async function PortalInvoiceDetailPage({ params }: { params: { id: string } }) {
@@ -13,7 +14,10 @@ export default async function PortalInvoiceDetailPage({ params }: { params: { id
 
   const invoice = await prisma.invoice.findUnique({
     where: { id: params.id },
-    include: { order: { include: { customer: true, items: true } } },
+    include: {
+      order: { include: { customer: true, items: true } },
+      paymentRequests: { where: { status: 'PENDING' }, select: { id: true } },
+    },
   });
 
   // A customer may only ever view their own invoices.
@@ -60,6 +64,15 @@ export default async function PortalInvoiceDetailPage({ params }: { params: { id
       </div>
 
       <InvoiceActions data={data} targetElementId="invoice-capture-target" />
+
+      <div className="mx-auto mt-4 max-w-md">
+        <PayInvoiceForm
+          invoiceId={invoice.id}
+          invoiceNumber={invoice.invoiceNumber}
+          outstanding={toNumber(invoice.outstandingBalance)}
+          hasPendingRequest={invoice.paymentRequests.length > 0}
+        />
+      </div>
     </main>
   );
 }

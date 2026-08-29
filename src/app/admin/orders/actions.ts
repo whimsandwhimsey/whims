@@ -358,6 +358,54 @@ export async function saveOrder(input: SaveOrderInput): Promise<SaveOrderResult>
   }
 }
 
+export type BulkAssignResult = { success: true; batchId: string; updated: number } | { success: false; error: string };
+
+/** Assigns a set of orders to an existing PO batch, or creates a new one
+ * first if newBatchName is given — used by the "select multiple orders"
+ * bulk action on the Data Order page. All selected orders must share the
+ * same order type (PO_REGULAR / PO_REMAINDER) as the target batch. */
+export async function bulkAssignOrdersToBatch(
+  orderIds: string[],
+  options: { existingBatchId?: string; newBatchName?: string; orderType?: string }
+): Promise<BulkAssignResult> {
+  const session = await requireStaffSession();
+  if (orderIds.length === 0) return { success: false, error: 'No orders selected.' };
+
+  try {
+    let batchId = options.existingBatchId;
+    if (!batchId) {
+      if (!options.newBatchName?.trim()) return { success: false, error: 'Nama batch baru wajib diisi.' };
+      if (!options.orderType) return { success: false, error: 'Order type wajib ada buat bikin batch baru.' };
+      const created = await prisma.purchaseBatch.create({
+        data: { name: options.newBatchName.trim(), type: options.orderType as any },
+      });
+      batchId = created.id;
+    }
+
+    const result = await prisma.order.updateMany({
+      where: { id: { in: orderIds } },
+      data: { poBatchId: batchId },
+    });
+
+    const batch = await prisma.purchaseBatch.findUnique({ where: { id: batchId } });
+    await writeAuditLog({
+      userId: session.user.id,
+      action: 'UPDATE',
+      entityType: 'PurchaseBatch',
+      entityId: batchId,
+      summary: `Bulk-assigned ${result.count} order(s) to batch "${batch?.name ?? batchId}"`,
+    });
+
+    revalidatePath('/admin/orders');
+    revalidatePath(`/admin/po-batches/${batchId}`);
+    return { success: true, batchId, updated: result.count };
+  } catch (err) {
+    console.error(err);
+    return { success: false, error: 'Failed to assign orders to batch.' };
+  }
+}
+
+
 export async function updateOrderStatus(id: string, status: string) {
   const session = await requireStaffSession();
 

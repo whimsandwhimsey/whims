@@ -7,6 +7,7 @@ import { SearchBox } from '@/components/search-box';
 import { Pagination } from '@/components/pagination';
 import { DeleteButton } from '@/components/delete-button';
 import { CustomerStatusFilterSelect } from './customer-status-filter';
+import { CustomerSortSelect } from './customer-sort';
 import { ImportCustomersForm } from './import-customers-form';
 import { DepositTopUpForm } from './deposit-topup-form';
 import { ApproveCustomerButton } from './approve-customer-button';
@@ -30,11 +31,21 @@ const STATUS_LABEL: Record<string, string> = {
 export default async function CustomersPage({
   searchParams,
 }: {
-  searchParams: { q?: string; page?: string; status?: string };
+  searchParams: { q?: string; page?: string; status?: string; sort?: string };
 }) {
   const q = searchParams.q?.trim() ?? '';
   const status = searchParams.status ?? '';
+  const sort = searchParams.sort ?? 'recent';
   const page = Math.max(1, parseInt(searchParams.page ?? '1', 10) || 1);
+
+  const orderBy =
+    sort === 'name_asc'
+      ? [{ name: 'asc' as const }]
+      : sort === 'name_desc'
+        ? [{ name: 'desc' as const }]
+        : sort === 'orders_desc'
+          ? [{ orders: { _count: 'desc' as const } }]
+          : [{ status: 'asc' as const }, { createdAt: 'desc' as const }];
 
   const where: Record<string, unknown> = {};
   if (status && ['PENDING', 'ACTIVE', 'REJECTED', 'ARCHIVED'].includes(status)) {
@@ -54,7 +65,7 @@ export default async function CustomersPage({
   const [customers, total, pendingCount] = await Promise.all([
     prisma.customer.findMany({
       where,
-      orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
+      orderBy,
       skip: (page - 1) * PAGE_SIZE,
       take: PAGE_SIZE,
       include: { _count: { select: { orders: true } } },
@@ -107,6 +118,9 @@ export default async function CustomersPage({
         <SearchBox placeholder="Search by name or phone…" />
         <div className="w-48">
           <CustomerStatusFilterSelect />
+        </div>
+        <div className="w-52">
+          <CustomerSortSelect />
         </div>
       </div>
 
@@ -187,7 +201,7 @@ export default async function CustomersPage({
           page={page}
           totalPages={totalPages}
           buildHref={(p) =>
-            `/admin/customers?${new URLSearchParams({ ...(q ? { q } : {}), ...(status ? { status } : {}), page: String(p) })}`
+            `/admin/customers?${new URLSearchParams({ ...(q ? { q } : {}), ...(status ? { status } : {}), ...(sort !== 'recent' ? { sort } : {}), page: String(p) })}`
           }
         />
       </Card>

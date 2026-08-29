@@ -45,6 +45,55 @@ export async function requestTopUp(formData: FormData): Promise<ActionResult> {
   }
 }
 
+const invoicePaymentSchema = z.object({
+  invoiceId: z.string().min(1),
+  amount: z.coerce.number().positive('Amount must be greater than zero'),
+});
+
+/**
+ * Records the customer's own claim that they've paid a specific invoice.
+ * Same handshake as requestTopUp — never touches Payment/Invoice directly,
+ * just creates a PENDING request that staff confirm from /admin/requests
+ * after checking the transfer actually came in.
+ */
+export async function requestInvoicePayment(formData: FormData): Promise<ActionResult> {
+  const session = await requireCustomerSession();
+  const parsed = invoicePaymentSchema.safeParse({
+    invoiceId: formData.get('invoiceId'),
+    amount: formData.get('amount'),
+  });
+  if (!parsed.success) {
+    return { success: false, error: 'Please enter a valid amount.' };
+  }
+
+  try {
+    const invoice = await prisma.invoice.findUnique({ where: { id: parsed.data.invoiceId } });
+    if (!invoice) return { success: false, error: 'Invoice not found.' };
+
+    await prisma.invoicePaymentRequest.create({
+      data: {
+        customerId: session.user.id,
+        invoiceId: parsed.data.invoiceId,
+        amount: parsed.data.amount,
+      },
+    });
+
+    await writeAuditLog({
+      action: 'CREATE',
+      entityType: 'InvoicePaymentRequest',
+      summary: `Customer claimed payment of ${parsed.data.amount} for invoice ${invoice.invoiceNumber}`,
+    });
+
+    revalidatePath('/portal/orders');
+    revalidatePath(`/portal/orders/${invoice.orderId}`);
+    revalidatePath(`/portal/invoices/${invoice.id}`);
+    return { success: true };
+  } catch (err) {
+    console.error(err);
+    return { success: false, error: 'Failed to submit your payment claim. Please try again.' };
+  }
+}
+
 const addressSchema = z.object({ newAddress: z.string().min(1, 'Please enter an address') });
 
 /**

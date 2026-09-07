@@ -4,7 +4,6 @@ import { Card } from '@/components/ui/card';
 import { ShippingForm } from './shipping-form';
 import { PackedCheckbox } from './packed-checkbox';
 import { PackingNoteField } from './packing-note-field';
-import { formatDate } from '@/lib/utils';
 
 export default async function PackingListPage() {
   const orders = await prisma.order.findMany({

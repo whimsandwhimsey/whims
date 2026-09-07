@@ -5,6 +5,10 @@ export type InvoiceDocumentData = {
   type: 'DEPOSIT' | 'FINAL_PAYMENT' | 'READY_STOCK';
   amount: number;
   issuedAt: Date | string;
+  /** Sum of this order's DEPOSIT invoice(s) — shown only on a FINAL_PAYMENT
+   * invoice, so the customer can see the DP already paid alongside the
+   * pelunasan amount. */
+  depositPaidAmount?: number;
   order: {
     orderNumber: string;
     orderDate: Date | string;
@@ -109,6 +113,9 @@ export function InvoiceDocument({ data, id }: { data: InvoiceDocumentData; id?: 
 
       <div className="mb-6 space-y-1.5 text-sm">
         <Row label="Order total" value={formatCurrency(data.order.totalAmount)} />
+        {data.type === 'FINAL_PAYMENT' && data.depositPaidAmount !== undefined && (
+          <Row label="DP sudah dibayar" value={formatCurrency(data.depositPaidAmount)} />
+        )}
         <div className="my-2 border-t border-border" />
         <Row label={`This invoice (${TYPE_LABELS[data.type]})`} value={formatCurrency(data.amount)} bold />
       </div>

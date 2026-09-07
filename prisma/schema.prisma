@@ -167,6 +167,7 @@ model Customer {
   topUpRequests    TopUpRequest[]
   addressChangeRequests AddressChangeRequest[]
   invoicePaymentRequests InvoicePaymentRequest[]
+  packingNote      PackingNote?
 
   @@index([phone])
   @@index([name])
@@ -365,6 +366,7 @@ model OrderItem {
   oosResolution  OosResolution?
   oosResolvedAt  DateTime?
   oosNotes       String?
+  packedAt       DateTime?       // lightweight "physically packed" checkbox in the Packing List — per book, not per order
 
   @@index([orderId])
   @@map("order_items")
@@ -514,6 +516,19 @@ model InvoicePaymentRequest {
   @@index([status])
   @@index([invoiceId])
   @@map("invoice_payment_requests")
+}
+
+/// Freeform note per customer shown in the Packing List — for "hold",
+/// "kirim setengah dulu", or anything else that doesn't fit a fixed status.
+/// One per customer since packing is grouped by customer, not by order.
+model PackingNote {
+  id         String   @id @default(cuid())
+  customerId String   @unique
+  customer   Customer @relation(fields: [customerId], references: [id])
+  note       String
+  updatedAt  DateTime @updatedAt
+
+  @@map("packing_notes")
 }
 
 /// A customer's self-requested address change. Doesn't touch Customer.address

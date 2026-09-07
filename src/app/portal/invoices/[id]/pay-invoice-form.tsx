@@ -12,7 +12,7 @@ import { formatCurrency } from '@/lib/utils';
 import { requestInvoicePayment } from '../../actions';
 
 // Admin's WhatsApp number, in wa.me format (country code, no +, no spaces).
-const ADMIN_WHATSAPP = '6285121567309';
+const ADMIN_WHATSAPP = '628561222325';
 
 export function PayInvoiceForm({
   invoiceId,

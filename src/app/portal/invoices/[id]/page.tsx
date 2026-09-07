@@ -15,7 +15,7 @@ export default async function PortalInvoiceDetailPage({ params }: { params: { id
   const invoice = await prisma.invoice.findUnique({
     where: { id: params.id },
     include: {
-      order: { include: { customer: true, items: true } },
+      order: { include: { customer: true, items: true, invoices: { where: { type: 'DEPOSIT' } } } },
       paymentRequests: { where: { status: 'PENDING' }, select: { id: true } },
     },
   });
@@ -28,6 +28,10 @@ export default async function PortalInvoiceDetailPage({ params }: { params: { id
     type: invoice.type,
     amount: toNumber(invoice.amount),
     issuedAt: invoice.issuedAt,
+    depositPaidAmount:
+      invoice.type === 'FINAL_PAYMENT'
+        ? invoice.order.invoices.reduce((sum, dp) => sum + toNumber(dp.amount), 0)
+        : undefined,
     order: {
       orderNumber: invoice.order.orderNumber,
       orderDate: invoice.order.orderDate,

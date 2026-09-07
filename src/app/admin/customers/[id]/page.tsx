@@ -151,7 +151,8 @@ export default async function CustomerProfilePage({ params }: { params: { id: st
               {history.length === 0 ? (
                 <p className="p-6 text-sm text-muted-foreground">Belum ada transaksi.</p>
               ) : (
-                <table className="w-full text-sm">
+                <div className="overflow-x-auto">
+                <table className="w-full min-w-[480px] text-sm">
                   <thead className="bg-secondary text-left text-xs uppercase tracking-wide text-muted-foreground">
                     <tr>
                       <th className="px-4 py-2 font-medium">Tanggal</th>
@@ -176,6 +177,7 @@ export default async function CustomerProfilePage({ params }: { params: { id: st
                     ))}
                   </tbody>
                 </table>
+                </div>
               )}
             </CardContent>
           </Card>

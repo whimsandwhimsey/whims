@@ -44,11 +44,11 @@ type Rate = {
 };
 
 export function ShippingForm({
-  orderId,
+  orderIds,
   initialCourier,
   initialTracking,
 }: {
-  orderId: string;
+  orderIds: string[];
   initialCourier: string | null;
   initialTracking: string | null;
 }) {
@@ -66,7 +66,7 @@ export function ShippingForm({
     setRatesLoading(true);
     setRateError(null);
     setRates(null);
-    fetch(`/api/shipping/rates?orderId=${orderId}`)
+    fetch(`/api/shipping/rates?orderId=${orderIds[0]}`)
       .then((res) => res.json())
       .then((data) => {
         if (data.error) {
@@ -83,7 +83,7 @@ export function ShippingForm({
     setError(null);
     setSaved(false);
     startTransition(async () => {
-      const result = await saveShippingInfo(orderId, formData);
+      const result = await saveShippingInfo(orderIds, formData);
       if (!result.success) {
         setError(result.error);
         return;

@@ -10,7 +10,9 @@ import { formatCurrency, formatDate } from '@/lib/utils';
 import { deletePoBatch, togglePoBatchOpen } from '../actions';
 import { GenerateInvoicesButton } from '../generate-invoices-button';
 import { BatchStatusChanger } from '../batch-status-changer';
-import { Download } from 'lucide-react';
+import { MultiSelectFilter } from '@/components/multi-select-filter';
+import { SortSelect } from '@/components/sort-select';
+import { ExportBuilderButton } from '@/components/export-builder-button';
 
 const TYPE_LABELS: Record<string, string> = {
   PO_REGULAR: 'PO Reguler',
@@ -26,7 +28,20 @@ const TYPE_RULE: Record<string, string> = {
   EVENT_JASTIP: 'Full order amount',
 };
 
-export default async function PoBatchDetailPage({ params }: { params: { id: string } }) {
+const PAYMENT_STATUS_LABELS: Record<string, string> = {
+  UNPAID: 'Unpaid',
+  PARTIAL: 'Partial',
+  PAID: 'Paid',
+  OVERPAID: 'Overpaid',
+};
+
+export default async function PoBatchDetailPage({
+  params,
+  searchParams,
+}: {
+  params: { id: string };
+  searchParams: { sort?: string; paymentStatus?: string };
+}) {
   const batch = await prisma.purchaseBatch.findUnique({
     where: { id: params.id },
     include: {
@@ -55,6 +70,19 @@ export default async function PoBatchDetailPage({ params }: { params: { id: stri
   const bookRows = [...bookSummary.values()].sort((a, b) => a.title.localeCompare(b.title));
   const totalBookQuantity = bookRows.reduce((sum, r) => sum + r.quantity, 0);
 
+  const paymentStatuses = (searchParams.paymentStatus ?? '').split(',').filter(Boolean);
+  const sort = searchParams.sort === 'name_desc' ? 'name_desc' : searchParams.sort === 'name_asc' ? 'name_asc' : 'recent';
+
+  let displayOrders = batch.orders;
+  if (paymentStatuses.length > 0) {
+    displayOrders = displayOrders.filter((o) => paymentStatuses.includes(o.paymentStatus));
+  }
+  displayOrders = [...displayOrders].sort((a, b) => {
+    if (sort === 'name_asc') return a.customer.name.localeCompare(b.customer.name);
+    if (sort === 'name_desc') return b.customer.name.localeCompare(a.customer.name);
+    return b.orderDate.getTime() - a.orderDate.getTime();
+  });
+
   return (
     <div className="p-4 sm:p-6">
       <div className="mb-4 flex items-center justify-between">
@@ -65,11 +93,7 @@ export default async function PoBatchDetailPage({ params }: { params: { id: stri
           <ArrowLeft className="h-4 w-4" /> Back to PO batches
         </Link>
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" size="sm" asChild>
-            <a href={`/api/export/po-batch/${batch.id}`} download>
-              <Download className="h-4 w-4" /> Export
-            </a>
-          </Button>
+          <ExportBuilderButton batchId={batch.id} />
           <form action={togglePoBatchOpen.bind(null, batch.id, !batch.isOpen)}>
             <Button
               type="submit"
@@ -88,6 +112,7 @@ export default async function PoBatchDetailPage({ params }: { params: { id: stri
           <DeleteButton
             action={deletePoBatch.bind(null, batch.id)}
             confirmMessage={`Delete "${batch.name}"? Only possible if no orders are linked.`}
+            redirectTo="/admin/po-batches"
           />
         </div>
       </div>
@@ -121,6 +146,7 @@ export default async function PoBatchDetailPage({ params }: { params: { id: stri
           {bookRows.length === 0 ? (
             <p className="p-4 text-sm text-muted-foreground">Belum ada item.</p>
           ) : (
+            <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-secondary text-left text-xs uppercase tracking-wide text-muted-foreground">
                 <tr>
@@ -139,6 +165,7 @@ export default async function PoBatchDetailPage({ params }: { params: { id: stri
                 ))}
               </tbody>
             </table>
+            </div>
           )}
         </CardContent>
       </Card>
@@ -166,22 +193,41 @@ export default async function PoBatchDetailPage({ params }: { params: { id: stri
           <CardTitle>Orders in this batch ({batch.orders.length})</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
+          {batch.orders.length > 0 && (
+            <div className="flex flex-wrap gap-2 border-b border-border p-4">
+              <MultiSelectFilter
+                paramKey="paymentStatus"
+                label="Payment"
+                options={Object.entries(PAYMENT_STATUS_LABELS).map(([value, label]) => ({ value, label }))}
+              />
+              <SortSelect
+                defaultValue="recent"
+                options={[
+                  { value: 'recent', label: 'Terbaru dulu' },
+                  { value: 'name_asc', label: 'Customer (A-Z)' },
+                  { value: 'name_desc', label: 'Customer (Z-A)' },
+                ]}
+              />
+            </div>
+          )}
           {batch.orders.length === 0 ? (
             <p className="p-6 text-sm text-muted-foreground">
               No orders assigned to this batch yet — pick it from the &quot;PO Batch&quot; field when creating
               or editing an order.
             </p>
+          ) : displayOrders.length === 0 ? (
+            <p className="p-6 text-sm text-muted-foreground">No orders match this filter.</p>
           ) : (
             <ul className="divide-y divide-border">
-              {batch.orders.map((o) => (
+              {displayOrders.map((o) => (
                 <li key={o.id}>
                   <Link
                     href={`/admin/orders/${o.id}`}
                     className="flex flex-col gap-2 p-4 hover:bg-secondary/50 sm:flex-row sm:items-center sm:justify-between"
                   >
                     <div>
-                      <p className="font-medium">{o.orderNumber}</p>
-                      <p className="text-xs text-muted-foreground">{o.customer.name}</p>
+                      <p className="font-medium">{o.customer.name}</p>
+                      <p className="text-xs text-muted-foreground">{o.orderNumber}</p>
                     </div>
                     <div className="flex items-center gap-2">
                       <PaymentStatusBadge status={o.paymentStatus} />

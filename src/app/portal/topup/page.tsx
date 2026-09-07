@@ -11,7 +11,7 @@ import { QrisDisplay } from '@/components/qris-display';
 import { requestTopUp } from '../actions';
 
 // Admin's WhatsApp number, in wa.me format (country code, no +, no spaces).
-const ADMIN_WHATSAPP = '6285121567309';
+const ADMIN_WHATSAPP = '628561222325';
 
 export default function PortalTopUpPage() {
   const [isPending, startTransition] = useTransition();

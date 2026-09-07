@@ -1,5 +1,6 @@
 import Link from 'next/link';
-import { Plus, Download } from 'lucide-react';
+import { Plus } from 'lucide-react';
+import { ExportBuilderButton } from '@/components/export-builder-button';
 import { prisma } from '@/lib/prisma';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -52,6 +53,7 @@ export default async function OrdersPage({
   const orderTypes = (searchParams.orderType ?? '').split(',').filter(Boolean);
   const supplierIds = (searchParams.supplier ?? '').split(',').filter(Boolean);
   const poMonths = (searchParams.poMonth ?? '').split(',').filter(Boolean);
+  const etaMonths = (searchParams.eta ?? '').split(',').filter(Boolean);
   const publisherIds = (searchParams.publisher ?? '').split(',').filter(Boolean);
   const sort = ['oldest', 'name_asc', 'name_desc'].includes(searchParams.sort ?? '') ? searchParams.sort! : 'newest';
   const page = Math.max(1, parseInt(searchParams.page ?? '1', 10) || 1);
@@ -63,6 +65,7 @@ export default async function OrdersPage({
   if (orderTypes.length > 0) where.orderType = { in: orderTypes };
   if (supplierIds.length > 0) where.supplierId = { in: supplierIds };
   if (poMonths.length > 0) where.poMonth = { in: poMonths };
+  if (etaMonths.length > 0) where.etaMonth = { in: etaMonths };
   if (publisherIds.length > 0) {
     where.items = { some: { book: { publisherId: { in: publisherIds } } } };
   }
@@ -76,7 +79,7 @@ export default async function OrdersPage({
     ];
   }
 
-  const [orders, total, poBatches, suppliers, publishers, poMonthRows] = await Promise.all([
+  const [orders, total, poBatches, suppliers, publishers, poMonthRows, etaMonthRows] = await Promise.all([
     prisma.order.findMany({
       where,
       orderBy:
@@ -105,6 +108,12 @@ export default async function OrdersPage({
       select: { poMonth: true },
       orderBy: { poMonth: 'desc' },
     }),
+    prisma.order.findMany({
+      where: { etaMonth: { not: null } },
+      distinct: ['etaMonth'],
+      select: { etaMonth: true },
+      orderBy: { etaMonth: 'asc' },
+    }),
   ]);
 
 
@@ -120,6 +129,7 @@ export default async function OrdersPage({
     if (orderTypes.length) params.set('orderType', orderTypes.join(','));
     if (supplierIds.length) params.set('supplier', supplierIds.join(','));
     if (poMonths.length) params.set('poMonth', poMonths.join(','));
+    if (etaMonths.length) params.set('eta', etaMonths.join(','));
     if (publisherIds.length) params.set('publisher', publisherIds.join(','));
     if (sort !== 'newest') params.set('sort', sort);
     params.set('page', String(p));
@@ -134,6 +144,7 @@ export default async function OrdersPage({
   if (orderTypes.length) exportParams.set('orderType', orderTypes.join(','));
   if (supplierIds.length) exportParams.set('supplier', supplierIds.join(','));
   if (poMonths.length) exportParams.set('poMonth', poMonths.join(','));
+  if (etaMonths.length) exportParams.set('eta', etaMonths.join(','));
   if (publisherIds.length) exportParams.set('publisher', publisherIds.join(','));
 
   return (
@@ -144,11 +155,7 @@ export default async function OrdersPage({
           <p className="text-sm text-muted-foreground">{total} total</p>
         </div>
         <div className="flex w-full flex-wrap gap-2 sm:w-auto">
-          <Button variant="outline" size="sm" asChild className="flex-1 sm:flex-none">
-            <a href={`/api/export/orders?${exportParams.toString()}`} download>
-              <Download className="h-4 w-4" /> Export ({total} filtered)
-            </a>
-          </Button>
+          <ExportBuilderButton baseParams={exportParams} />
           <Button asChild className="flex-1 sm:flex-none">
             <Link href="/admin/orders/new">
               <Plus className="h-4 w-4" /> New order
@@ -206,6 +213,34 @@ export default async function OrdersPage({
           ]}
         />
       </div>
+
+      {etaMonthRows.length > 0 && (
+        <div className="mb-4 flex flex-wrap items-center gap-1.5">
+          <span className="text-xs text-muted-foreground">ETA:</span>
+          {etaMonthRows.map((r) => {
+            const value = r.etaMonth as string;
+            const isActive = etaMonths.includes(value);
+            const params = new URLSearchParams(exportParams);
+            params.delete('page');
+            const nextEtas = isActive ? etaMonths.filter((e) => e !== value) : [...etaMonths, value];
+            if (nextEtas.length) params.set('eta', nextEtas.join(','));
+            else params.delete('eta');
+            return (
+              <Link
+                key={value}
+                href={`/admin/orders?${params.toString()}`}
+                className={`rounded-full border px-2.5 py-1 text-xs font-medium ${
+                  isActive
+                    ? 'border-primary bg-primary text-primary-foreground'
+                    : 'border-border bg-secondary text-secondary-foreground hover:bg-secondary/70'
+                }`}
+              >
+                {value}
+              </Link>
+            );
+          })}
+        </div>
+      )}
 
       <Card className="overflow-hidden">
         <OrdersList orders={orders as any} poBatches={poBatches} />

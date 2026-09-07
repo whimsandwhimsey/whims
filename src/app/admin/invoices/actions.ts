@@ -62,9 +62,75 @@ export async function createInvoice(input: z.infer<typeof createInvoiceSchema>):
   }
 }
 
-export async function deleteInvoice(id: string) {
+const editAmountSchema = z.object({ amount: z.coerce.number().positive('Amount must be greater than zero') });
+
+/**
+ * Edits an invoice's face amount — only while it has zero amountPaid.
+ * Once any real money (or deposit) has been applied to it, the invoice is
+ * a historical record and must stay locked, same principle as the
+ * customer-facing document never showing live payment status.
+ */
+export async function editInvoiceAmount(id: string, formData: FormData): Promise<{ success: true } | { success: false; error: string }> {
   const session = await requireStaffSession();
-  const invoice = await prisma.invoice.delete({ where: { id } });
+  const parsed = editAmountSchema.safeParse({ amount: formData.get('amount') });
+  if (!parsed.success) {
+    return { success: false, error: parsed.error.flatten().fieldErrors.amount?.[0] ?? 'Invalid amount.' };
+  }
+
+  const invoice = await prisma.invoice.findUnique({ where: { id } });
+  if (!invoice) return { success: false, error: 'Invoice not found.' };
+
+  if (Number(invoice.amountPaid.toString()) > 0) {
+    return {
+      success: false,
+      error: 'Invoice ini udah ada pembayaran yang nempel — jumlahnya gak bisa diubah lagi.',
+    };
+  }
+
+  const oldAmount = invoice.amount.toString();
+  await prisma.invoice.update({
+    where: { id },
+    data: { amount: parsed.data.amount, outstandingBalance: parsed.data.amount },
+  });
+
+  await writeAuditLog({
+    userId: session.user.id,
+    action: 'UPDATE',
+    entityType: 'Invoice',
+    entityId: id,
+    summary: `Edited invoice ${invoice.invoiceNumber} amount: ${oldAmount} → ${parsed.data.amount}`,
+  });
+
+  revalidatePath(`/admin/invoices/${id}`);
+  revalidatePath(`/admin/orders/${invoice.orderId}`);
+  return { success: true };
+}
+
+export async function deleteInvoice(id: string): Promise<void> {
+  const session = await requireStaffSession();
+
+  const invoice = await prisma.invoice.findUnique({
+    where: { id },
+    include: { payments: true, paymentRequests: true },
+  });
+  if (!invoice) throw new Error('Invoice not found.');
+
+  if (invoice.payments.length > 0) {
+    throw new Error(
+      `Invoice ini punya ${invoice.payments.length} payment asli yang nempel — hapus/pindahin payment-nya dulu sebelum invoice ini bisa dihapus.`
+    );
+  }
+
+  // Any customer self-service payment claims tied to this invoice (pending
+  // or rejected — never a confirmed one, since that would've created a
+  // real Payment and been caught above) are moot once the invoice itself
+  // is gone, so they're cleared automatically rather than silently
+  // blocking deletion with an unhelpful foreign-key error.
+  if (invoice.paymentRequests.length > 0) {
+    await prisma.invoicePaymentRequest.deleteMany({ where: { invoiceId: id } });
+  }
+
+  await prisma.invoice.delete({ where: { id } });
 
   await writeAuditLog({
     userId: session.user.id,

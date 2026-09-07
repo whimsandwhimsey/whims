@@ -15,13 +15,15 @@ export default async function AdminDashboardPage() {
     orders,
     expenses,
     recentActivity,
+    depositTxns,
   ] = await Promise.all([
     prisma.customer.count({ where: { status: 'ACTIVE' } }),
     prisma.customer.count({ where: { status: 'PENDING' } }),
     Promise.all([
       prisma.topUpRequest.count({ where: { status: 'PENDING' } }),
       prisma.addressChangeRequest.count({ where: { status: 'PENDING' } }),
-    ]).then(([a, b]) => a + b),
+      prisma.invoicePaymentRequest.count({ where: { status: 'PENDING' } }),
+    ]).then(([a, b, c]) => a + b + c),
     prisma.order.count({ where: { status: { notIn: ['COMPLETED', 'CANCELLED'] } } }),
     prisma.order.count({ where: { status: 'WAITING' } }),
     prisma.order.findMany({
@@ -34,12 +36,21 @@ export default async function AdminDashboardPage() {
       take: 8,
       include: { user: { select: { name: true } } },
     }),
+    prisma.depositTransaction.findMany({
+      orderBy: { createdAt: 'asc' },
+      select: { customerId: true, balanceAfter: true },
+    }),
   ]);
 
   const outstandingTotal = orders.reduce((sum, o) => sum + toNumber(o.outstandingBalance), 0);
   const revenueCollected = orders.reduce((sum, o) => sum + toNumber(o.amountPaid), 0);
   const totalExpenses = expenses.reduce((sum, e) => sum + toNumber(e.amount), 0);
   const netProfit = revenueCollected - totalExpenses;
+
+  // Total deposit across every customer — last balanceAfter per customer, summed.
+  const latestBalanceByCustomer = new Map<string, number>();
+  for (const t of depositTxns) latestBalanceByCustomer.set(t.customerId, toNumber(t.balanceAfter));
+  const totalDeposit = [...latestBalanceByCustomer.values()].reduce((sum, b) => sum + b, 0);
 
   return (
     <div className="p-4 sm:p-6">
@@ -91,6 +102,12 @@ export default async function AdminDashboardPage() {
           label="Outstanding balance"
           value={formatCurrency(outstandingTotal)}
           href="/admin/orders"
+        />
+        <MetricCard
+          icon={Wallet}
+          label="Total deposit (semua customer)"
+          value={formatCurrency(totalDeposit)}
+          href="/admin/customers"
         />
       </div>
 

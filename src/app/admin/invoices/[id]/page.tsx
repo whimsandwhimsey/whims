@@ -8,6 +8,7 @@ import { DeleteButton } from '@/components/delete-button';
 import { PaymentStatusBadge } from '@/components/status-badges';
 import { deleteInvoice } from '../actions';
 import { InvoiceStatusToggles } from './invoice-status-toggles';
+import { EditInvoiceAmount } from './edit-invoice-amount';
 import { formatCurrency } from '@/lib/utils';
 import { toNumber } from '@/lib/calculations';
 
@@ -15,7 +16,7 @@ export default async function AdminInvoiceDetailPage({ params }: { params: { id:
   const invoice = await prisma.invoice.findUnique({
     where: { id: params.id },
     include: {
-      order: { include: { customer: true, items: true } },
+      order: { include: { customer: true, items: true, invoices: { where: { type: 'DEPOSIT' } } } },
     },
   });
   if (!invoice) notFound();
@@ -25,6 +26,10 @@ export default async function AdminInvoiceDetailPage({ params }: { params: { id:
     type: invoice.type,
     amount: toNumber(invoice.amount),
     issuedAt: invoice.issuedAt,
+    depositPaidAmount:
+      invoice.type === 'FINAL_PAYMENT'
+        ? invoice.order.invoices.reduce((sum, dp) => sum + toNumber(dp.amount), 0)
+        : undefined,
     order: {
       orderNumber: invoice.order.orderNumber,
       orderDate: invoice.order.orderDate,
@@ -58,6 +63,7 @@ export default async function AdminInvoiceDetailPage({ params }: { params: { id:
           action={deleteInvoice.bind(null, invoice.id)}
           confirmMessage={`Delete invoice ${invoice.invoiceNumber}?`}
           label="Delete"
+          redirectTo={`/admin/orders/${invoice.orderId}`}
         />
       </div>
 
@@ -69,6 +75,13 @@ export default async function AdminInvoiceDetailPage({ params }: { params: { id:
         <div className="flex justify-between text-sm">
           <span className="text-muted-foreground">Amount</span>
           <span>{formatCurrency(toNumber(invoice.amount))}</span>
+        </div>
+        <div className="mb-1 flex justify-end">
+          <EditInvoiceAmount
+            invoiceId={invoice.id}
+            amount={toNumber(invoice.amount)}
+            amountPaid={toNumber(invoice.amountPaid)}
+          />
         </div>
         <div className="flex justify-between text-sm">
           <span className="text-muted-foreground">Paid so far</span>

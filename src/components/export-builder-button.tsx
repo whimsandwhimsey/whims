@@ -3,32 +3,7 @@
 import { useState } from 'react';
 import { Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-
-const COLUMN_DEFS: { id: string; label: string }[] = [
-  { id: 'orderNumber', label: 'Order #' },
-  { id: 'customerName', label: 'Customer' },
-  { id: 'customerPhone', label: 'No. HP' },
-  { id: 'poBatchName', label: 'PO Batch' },
-  { id: 'orderType', label: 'Order Type' },
-  { id: 'poMonth', label: 'PO Month' },
-  { id: 'etaMonth', label: 'ETA Month' },
-  { id: 'supplierName', label: 'Supplier' },
-  { id: 'bookTitle', label: 'Judul Buku' },
-  { id: 'isbn', label: 'ISBN' },
-  { id: 'publisherName', label: 'Publisher' },
-  { id: 'format', label: 'Format' },
-  { id: 'quantity', label: 'Qty' },
-  { id: 'sellingPrice', label: 'Harga Satuan' },
-  { id: 'discount', label: 'Diskon' },
-  { id: 'subtotal', label: 'Subtotal' },
-  { id: 'orderStatus', label: 'Status Kirim' },
-  { id: 'paymentStatus', label: 'Status Bayar' },
-  { id: 'orderTotalAmount', label: 'Total Order' },
-  { id: 'orderOutstanding', label: 'Outstanding Order' },
-];
-
-const SIMPLE_PRESET = ['orderNumber', 'customerName', 'bookTitle', 'quantity', 'subtotal'];
-const ALL_COLUMNS = COLUMN_DEFS.map((c) => c.id);
+import { COLUMN_DEFS, SIMPLE_PRESET, ALL_COLUMN_IDS } from '@/lib/export-columns';
 
 export function ExportBuilderButton({
   baseParams,
@@ -38,7 +13,7 @@ export function ExportBuilderButton({
   batchId?: string;
 }) {
   const [open, setOpen] = useState(false);
-  const [selected, setSelected] = useState<Set<string>>(new Set(ALL_COLUMNS));
+  const [selected, setSelected] = useState<Set<string>>(new Set(ALL_COLUMN_IDS));
 
   function toggle(id: string) {
     setSelected((prev) => {
@@ -81,7 +56,7 @@ export function ExportBuilderButton({
           <button
             type="button"
             className="text-xs text-primary underline underline-offset-2"
-            onClick={() => setSelected(new Set(ALL_COLUMNS))}
+            onClick={() => setSelected(new Set(ALL_COLUMN_IDS))}
           >
             Lengkap
           </button>

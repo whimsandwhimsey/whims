@@ -204,6 +204,11 @@ export default async function OrdersPage({
           label="PO Batch"
           options={poBatches.map((b) => ({ value: b.id, label: b.name }))}
         />
+        <MultiSelectFilter
+          paramKey="eta"
+          label="ETA Book"
+          options={etaMonthRows.filter((r) => r.etaMonth).map((r) => ({ value: r.etaMonth as string, label: r.etaMonth as string }))}
+        />
         <SortSelect
           defaultValue="newest"
           options={[
@@ -214,34 +219,6 @@ export default async function OrdersPage({
           ]}
         />
       </div>
-
-      {etaMonthRows.length > 0 && (
-        <div className="mb-4 flex flex-wrap items-center gap-1.5">
-          <span className="text-xs text-muted-foreground">ETA:</span>
-          {etaMonthRows.map((r) => {
-            const value = r.etaMonth as string;
-            const isActive = etaMonths.includes(value);
-            const params = new URLSearchParams(exportParams);
-            params.delete('page');
-            const nextEtas = isActive ? etaMonths.filter((e) => e !== value) : [...etaMonths, value];
-            if (nextEtas.length) params.set('eta', nextEtas.join(','));
-            else params.delete('eta');
-            return (
-              <Link
-                key={value}
-                href={`/admin/orders?${params.toString()}`}
-                className={`rounded-full border px-2.5 py-1 text-xs font-medium ${
-                  isActive
-                    ? 'border-primary bg-primary text-primary-foreground'
-                    : 'border-border bg-secondary text-secondary-foreground hover:bg-secondary/70'
-                }`}
-              >
-                {value}
-              </Link>
-            );
-          })}
-        </div>
-      )}
 
       <Card className="overflow-hidden">
         <OrdersList orders={orders as any} poBatches={poBatches} />

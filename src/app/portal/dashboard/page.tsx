@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Pencil, Wallet, HelpCircle } from 'lucide-react';
+import { Pencil, Wallet, HelpCircle, Truck } from 'lucide-react';
 import { Logo } from '@/components/logo';
 import { prisma } from '@/lib/prisma';
 import { getAuthSession } from '@/lib/session';
@@ -204,8 +204,8 @@ export default async function PortalDashboardPage({
           </CardContent>
         </Card>
 
-        {/* 4-5. Top up, FAQ */}
-        <div className="grid gap-3 sm:grid-cols-2">
+        {/* 4-6. Top up, Pengiriman, FAQ */}
+        <div className="grid gap-3 sm:grid-cols-3">
           <Link href="/portal/topup">
             <Card className="transition-colors hover:border-primary/40">
               <CardContent className="flex items-center gap-3 pt-6">
@@ -215,6 +215,19 @@ export default async function PortalDashboardPage({
                 <div>
                   <p className="font-medium">Top up deposit</p>
                   <p className="text-xs text-muted-foreground">Scan QRIS &amp; notify admin via WhatsApp</p>
+                </div>
+              </CardContent>
+            </Card>
+          </Link>
+          <Link href="/portal/shipments">
+            <Card className="transition-colors hover:border-primary/40">
+              <CardContent className="flex items-center gap-3 pt-6">
+                <div className="rounded-md bg-secondary p-2.5">
+                  <Truck className="h-5 w-5 text-primary" />
+                </div>
+                <div>
+                  <p className="font-medium">Pengiriman</p>
+                  <p className="text-xs text-muted-foreground">Resi, status kirim, dan isi paketnya</p>
                 </div>
               </CardContent>
             </Card>

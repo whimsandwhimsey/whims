@@ -78,11 +78,9 @@ export default async function PackingListPage() {
                 {allItems.map((item) => (
                   <li key={item.id} className="flex items-center gap-2 text-sm text-muted-foreground">
                     <PackedCheckbox itemId={item.id} initialChecked={!!item.packedAt} />
-                    {item.book?.imageUrl ? (
+                    {item.book?.imageUrl && (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={item.book.imageUrl} alt="" className="h-8 w-6 shrink-0 rounded object-cover" />
-                    ) : (
-                      <div className="h-8 w-6 shrink-0 rounded bg-secondary" />
                     )}
                     <span className={item.packedAt ? 'line-through' : ''}>
                       {item.bookTitle} × {item.quantity}

@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { formatCurrency } from '@/lib/utils';
-import { saveShippingInfo } from './actions';
+import { createShipment } from './actions';
 
 const COURIER_LABELS: Record<string, string> = {
   LION: 'Lion Parcel',
@@ -83,7 +83,7 @@ export function ShippingForm({
     setError(null);
     setSaved(false);
     startTransition(async () => {
-      const result = await saveShippingInfo(orderIds, formData);
+      const result = await createShipment(orderIds, formData);
       if (!result.success) {
         setError(result.error);
         return;
@@ -117,6 +117,14 @@ export function ShippingForm({
           placeholder="Tracking / resi number"
           defaultValue={initialTracking ?? ''}
           className="sm:w-48"
+          required
+        />
+        <Input
+          name="shippingCost"
+          type="number"
+          min="0"
+          placeholder="Ongkir (Rp)"
+          className="sm:w-32"
           required
         />
         <Button type="submit" size="sm" disabled={isPending} className="shrink-0">

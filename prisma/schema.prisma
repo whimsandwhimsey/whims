@@ -144,6 +144,7 @@ model User {
   topUpsConfirmed TopUpRequest[]     @relation("TopUpConfirmedBy")
   addressChangesConfirmed AddressChangeRequest[] @relation("AddressChangeConfirmedBy")
   invoicePaymentsConfirmed InvoicePaymentRequest[] @relation("InvoicePaymentConfirmedBy")
+  shipmentsCreated Shipment[] @relation("ShipmentCreatedBy")
   auditLogs       AuditLog[]
 
   @@map("users")
@@ -168,6 +169,7 @@ model Customer {
   addressChangeRequests AddressChangeRequest[]
   invoicePaymentRequests InvoicePaymentRequest[]
   packingNote      PackingNote?
+  shipments        Shipment[]
 
   @@index([phone])
   @@index([name])
@@ -302,6 +304,8 @@ model Order {
 
   courier               Courier?
   trackingNumber        String?
+  shipmentId            String?
+  shipment              Shipment?   @relation(fields: [shipmentId], references: [id])
 
   // Denormalized, recalculated fields for fast dashboard/reporting reads.
   // Always derived from OrderItem + Payment + DepositTransaction — never
@@ -383,6 +387,8 @@ model Payment {
   order         Order?        @relation(fields: [orderId], references: [id])
   invoiceId     String?       // the specific invoice this payment pays down — chosen manually
   invoice       Invoice?      @relation(fields: [invoiceId], references: [id])
+  shipmentId    String?       // or, this payment is for a shipment's shipping fee instead
+  shipment      Shipment?     @relation(fields: [shipmentId], references: [id])
   date          DateTime      @default(now())
   amount        Decimal       @db.Decimal(12, 2)
   method        PaymentMethod
@@ -395,6 +401,7 @@ model Payment {
   @@index([customerId])
   @@index([orderId])
   @@index([invoiceId])
+  @@index([shipmentId])
   @@map("payments")
 }
 
@@ -529,6 +536,32 @@ model PackingNote {
   updatedAt  DateTime @updatedAt
 
   @@map("packing_notes")
+}
+
+/// One physical parcel (one resi/tracking number) — groups every order
+/// packed into it, which can span several PO batches for the same
+/// customer. Tracks the shipping fee itself as its own billable amount,
+/// same paid/outstanding pattern as Invoice, since it's a separate charge
+/// from the books themselves.
+model Shipment {
+  id                 String        @id @default(cuid())
+  customerId         String
+  customer           Customer      @relation(fields: [customerId], references: [id])
+  courier            Courier
+  trackingNumber     String
+  shippingCost       Decimal       @db.Decimal(12, 2)
+  amountPaid         Decimal       @default(0) @db.Decimal(12, 2)
+  outstandingBalance Decimal       @db.Decimal(12, 2)
+  paymentStatus      PaymentStatus @default(UNPAID)
+  createdAt          DateTime      @default(now())
+  createdById        String?
+  createdBy          User?         @relation("ShipmentCreatedBy", fields: [createdById], references: [id])
+
+  orders             Order[]
+  payments           Payment[]
+
+  @@index([customerId])
+  @@map("shipments")
 }
 
 /// A customer's self-requested address change. Doesn't touch Customer.address

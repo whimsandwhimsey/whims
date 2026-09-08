@@ -6,35 +6,54 @@ import { prisma } from '@/lib/prisma';
 import { requireStaffSession } from '@/lib/guards';
 import { writeAuditLog } from '@/lib/audit';
 import { courierValues } from '@/lib/validations';
-
-const shippingSchema = z.object({
-  courier: z.enum(courierValues),
-  trackingNumber: z.string().min(1, 'Tracking number is required'),
-});
+import { recalculateShipmentFinancials } from '@/lib/shipment-calculations';
 
 export type ActionResult = { success: true } | { success: false; error: string };
 
+const shipmentSchema = z.object({
+  courier: z.enum(courierValues),
+  trackingNumber: z.string().min(1, 'Tracking number is required'),
+  shippingCost: z.coerce.number().min(0, 'Shipping cost must be zero or more'),
+});
+
 /**
- * Saves the courier + tracking number for every order in a packing group
- * (a customer can have several orders from different PO batches packed
- * together into one parcel) — all of them get the same courier/resi, and
- * all move to Shipped together.
+ * Creates a Shipment (one resi) covering every order in a packing group —
+ * a customer can have several orders from different PO batches packed
+ * together into one parcel. Sets courier/tracking/shipmentId on all of
+ * them and moves them to Shipped together. The shipping fee becomes its
+ * own billable amount, tracked the same paid/outstanding way as an
+ * invoice, since it's a separate charge from the books themselves.
  */
-export async function saveShippingInfo(orderIds: string[], formData: FormData): Promise<ActionResult> {
+export async function createShipment(orderIds: string[], formData: FormData): Promise<ActionResult> {
   const session = await requireStaffSession();
-  const parsed = shippingSchema.safeParse({
+  const parsed = shipmentSchema.safeParse({
     courier: formData.get('courier'),
     trackingNumber: formData.get('trackingNumber'),
+    shippingCost: formData.get('shippingCost'),
   });
   if (!parsed.success) {
     const firstError = Object.values(parsed.error.flatten().fieldErrors)[0]?.[0];
-    return { success: false, error: firstError ?? 'Please fill in courier and tracking number.' };
+    return { success: false, error: firstError ?? 'Please fill in courier, tracking number, and shipping cost.' };
   }
-  if (orderIds.length === 0) return { success: false, error: 'No orders to update.' };
+  if (orderIds.length === 0) return { success: false, error: 'No orders to ship.' };
 
   try {
     const orders = await prisma.order.findMany({ where: { id: { in: orderIds } } });
     if (orders.length === 0) return { success: false, error: 'Orders not found.' };
+    const customerId = orders[0].customerId;
+
+    const shipment = await prisma.shipment.create({
+      data: {
+        customerId,
+        courier: parsed.data.courier,
+        trackingNumber: parsed.data.trackingNumber,
+        shippingCost: parsed.data.shippingCost,
+        amountPaid: 0,
+        outstandingBalance: parsed.data.shippingCost,
+        paymentStatus: 'UNPAID',
+        createdById: session.user.id,
+      },
+    });
 
     for (const order of orders) {
       const shouldMarkShipped = !['COMPLETED', 'CANCELLED', 'SHIPPED'].includes(order.status);
@@ -43,6 +62,7 @@ export async function saveShippingInfo(orderIds: string[], formData: FormData): 
         data: {
           courier: parsed.data.courier,
           trackingNumber: parsed.data.trackingNumber,
+          shipmentId: shipment.id,
           ...(shouldMarkShipped ? { status: 'SHIPPED' } : {}),
         },
       });
@@ -52,17 +72,66 @@ export async function saveShippingInfo(orderIds: string[], formData: FormData): 
 
     await writeAuditLog({
       userId: session.user.id,
-      action: 'UPDATE',
-      entityType: 'Order',
-      entityId: orderIds.join(','),
-      summary: `Set shipping info for ${orders.length} order(s): ${parsed.data.courier} / ${parsed.data.trackingNumber}`,
+      action: 'CREATE',
+      entityType: 'Shipment',
+      entityId: shipment.id,
+      summary: `Created shipment ${parsed.data.trackingNumber} (${parsed.data.courier}) for ${orders.length} order(s), ongkir ${parsed.data.shippingCost}`,
     });
 
     revalidatePath('/admin/packing');
+    revalidatePath('/admin/shipments');
     return { success: true };
   } catch (err) {
     console.error(err);
-    return { success: false, error: 'Failed to save shipping info.' };
+    return { success: false, error: 'Failed to create shipment.' };
+  }
+}
+
+/** Records a payment against a shipment's shipping fee — same pattern as
+ * recording a payment against an invoice. */
+export async function recordShipmentPayment(shipmentId: string, formData: FormData): Promise<ActionResult> {
+  const session = await requireStaffSession();
+  const amount = Number(formData.get('amount'));
+  const methodRaw = String(formData.get('method') ?? '');
+  if (!amount || amount <= 0) return { success: false, error: 'Amount must be greater than zero.' };
+  if (methodRaw !== 'QRIS' && methodRaw !== 'BANK_TRANSFER') {
+    return { success: false, error: 'Invalid payment method.' };
+  }
+  const method: 'QRIS' | 'BANK_TRANSFER' = methodRaw;
+
+  try {
+    const shipment = await prisma.shipment.findUnique({ where: { id: shipmentId } });
+    if (!shipment) return { success: false, error: 'Shipment not found.' };
+
+    await prisma.payment.create({
+      data: {
+        customerId: shipment.customerId,
+        shipmentId,
+        date: new Date(),
+        amount,
+        method,
+        notes: `Ongkir untuk resi ${shipment.trackingNumber}`,
+        recordedById: session.user.id,
+      },
+    });
+
+    await recalculateShipmentFinancials(shipmentId);
+
+    await writeAuditLog({
+      userId: session.user.id,
+      action: 'CREATE',
+      entityType: 'Payment',
+      entityId: shipmentId,
+      summary: `Recorded ongkir payment of ${amount} for shipment ${shipment.trackingNumber}`,
+    });
+
+    revalidatePath(`/admin/shipments/${shipmentId}`);
+    revalidatePath('/admin/shipments');
+    revalidatePath('/admin/payments');
+    return { success: true };
+  } catch (err) {
+    console.error(err);
+    return { success: false, error: 'Failed to record payment.' };
   }
 }
 

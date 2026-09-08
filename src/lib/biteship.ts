@@ -69,3 +69,53 @@ export async function getShippingRates(params: {
     price: p.price,
   }));
 }
+
+export type TrackingStatus = {
+  status: string;
+  history: { note: string; updatedAt: string }[];
+  link: string | null;
+};
+
+const COURIER_ENUM_TO_BITESHIP_CODE: Record<string, string> = {
+  JNE: 'jne',
+  JNT: 'jnt',
+  SICEPAT: 'sicepat',
+  ANTERAJA: 'anteraja',
+  LION: 'lion',
+  WAHANA: 'wahana',
+  NINJA: 'ninja',
+  IDEXPRESS: 'idexpress',
+};
+
+/**
+ * Looks up live tracking status for a waybill via Biteship's public
+ * tracking endpoint — same API key as the rate check, works for any
+ * courier they support even outside orders placed through Biteship
+ * itself. Returns null (never throws) if the courier isn't supported for
+ * tracking or the lookup fails — this is a nice-to-have, never something
+ * that should block showing the rest of a shipment's info.
+ */
+export async function getTrackingStatus(trackingNumber: string, courierEnum: string): Promise<TrackingStatus | null> {
+  const apiKey = process.env.BITESHIP_API_KEY;
+  const courierCode = COURIER_ENUM_TO_BITESHIP_CODE[courierEnum];
+  if (!apiKey || !courierCode || !trackingNumber) return null;
+
+  try {
+    const res = await fetch(
+      `https://api.biteship.com/v1/trackings/public?waybill_id=${encodeURIComponent(trackingNumber)}&courier_code=${courierCode}`,
+      { headers: { authorization: apiKey }, cache: 'no-store' }
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!data.success) return null;
+
+    return {
+      status: data.status ?? 'unknown',
+      history: (data.history ?? []).map((h: any) => ({ note: h.note, updatedAt: h.updated_at })),
+      link: data.courier?.link ?? null,
+    };
+  } catch (err) {
+    console.error('Biteship tracking lookup failed', err);
+    return null;
+  }
+}

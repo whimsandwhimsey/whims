@@ -9,6 +9,7 @@ import {
   BarChart3,
   Package,
   Truck,
+  Send,
   Wallet,
   AlertTriangle,
   Inbox,
@@ -32,6 +33,7 @@ const DESKTOP_NAV_ITEMS = [
   { href: '/admin/finance', label: 'Finance', icon: Wallet2 },
   { href: '/admin/expenses', label: 'Expenses', icon: Wallet },
   { href: '/admin/oos', label: 'Bulk OOS', icon: AlertTriangle },
+  { href: '/admin/shipments', label: 'Shipments', icon: Send },
   { href: '/admin/reports', label: 'Reports', icon: BarChart3 },
   { href: '/admin/audit-log', label: 'Audit Log', icon: History },
 ];

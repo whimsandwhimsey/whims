@@ -41,7 +41,46 @@ export default async function SuppliersPage({
       </div>
 
       <Card className="overflow-hidden">
-        <div className="overflow-x-auto">
+        {/* Mobile: compact cards */}
+        <div className="divide-y divide-border md:hidden">
+          {suppliers.map((s) => (
+            <div key={s.id} className="p-4">
+              <div className="mb-1 flex items-center justify-between gap-2">
+                <p className="font-medium">{s.name}</p>
+                <form action={toggleSupplierActive.bind(null, s.id, !s.isActive)}>
+                  <button
+                    type="submit"
+                    className={
+                      s.isActive
+                        ? 'rounded-full bg-success/15 px-2 py-0.5 text-[10px] font-medium text-success'
+                        : 'rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground'
+                    }
+                  >
+                    {s.isActive ? 'Active' : 'Archived'}
+                  </button>
+                </form>
+              </div>
+              <p className="mb-2 text-xs text-muted-foreground">{s._count.purchaseBatches} PO batch</p>
+              <div className="flex gap-1">
+                <Button variant="ghost" size="sm" asChild>
+                  <Link href={`/admin/suppliers/${s.id}/edit`}>
+                    <Pencil className="h-4 w-4" />
+                  </Link>
+                </Button>
+                <DeleteButton
+                  action={deleteSupplier.bind(null, s.id)}
+                  confirmMessage={`Hapus supplier "${s.name}"? Kalau masih dipakai di PO batch, arsipkan aja.`}
+                />
+              </div>
+            </div>
+          ))}
+          {suppliers.length === 0 && (
+            <p className="px-4 py-10 text-center text-sm text-muted-foreground">Belum ada supplier.</p>
+          )}
+        </div>
+
+        {/* Desktop: full table */}
+        <div className="hidden overflow-x-auto md:block">
           <table className="w-full text-sm">
             <thead className="bg-secondary text-left text-xs uppercase tracking-wide text-muted-foreground">
               <tr>

@@ -68,7 +68,57 @@ export default async function BooksPage({
       </div>
 
       <Card className="overflow-hidden">
-        <div className="overflow-x-auto">
+        {/* Mobile: compact cards */}
+        <div className="divide-y divide-border md:hidden">
+          {books.map((b) => (
+            <div key={b.id} className="flex gap-3 p-4">
+              {b.imageUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={b.imageUrl} alt="" className="h-16 w-11 shrink-0 rounded object-cover" />
+              ) : (
+                <div className="h-16 w-11 shrink-0 rounded bg-secondary" />
+              )}
+              <div className="min-w-0 flex-1">
+                <p className="font-medium">{b.title}</p>
+                <p className="text-xs text-muted-foreground">
+                  {[b.author, b.publisher?.name].filter(Boolean).join(' · ') || '—'}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {[b.isbn, b.format ? bookFormatLabels[b.format] ?? b.format : null].filter(Boolean).join(' · ')}
+                </p>
+                <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                  <form action={toggleBookActive.bind(null, b.id, !b.isActive)}>
+                    <button
+                      type="submit"
+                      className={
+                        b.isActive
+                          ? 'rounded-full bg-success/15 px-2 py-0.5 text-[10px] font-medium text-success'
+                          : 'rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground'
+                      }
+                    >
+                      {b.isActive ? 'Active' : 'Archived'}
+                    </button>
+                  </form>
+                  <Button variant="ghost" size="sm" asChild>
+                    <Link href={`/admin/books/${b.id}/edit`}>
+                      <Pencil className="h-4 w-4" />
+                    </Link>
+                  </Button>
+                  <DeleteButton
+                    action={deleteBook.bind(null, b.id)}
+                    confirmMessage={`Delete "${b.title}"? This cannot be undone.`}
+                  />
+                </div>
+              </div>
+            </div>
+          ))}
+          {books.length === 0 && (
+            <p className="px-4 py-10 text-center text-sm text-muted-foreground">No books found.</p>
+          )}
+        </div>
+
+        {/* Desktop: full table */}
+        <div className="hidden overflow-x-auto md:block">
           <table className="w-full text-sm">
             <thead className="bg-secondary text-left text-xs uppercase tracking-wide text-muted-foreground">
               <tr>

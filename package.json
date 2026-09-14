@@ -19,6 +19,8 @@
     "migrate:legacy:commit": "tsx scripts/migrate-legacy.ts --commit",
     "backfill:postal:dry-run": "tsx scripts/backfill-postal-codes.ts",
     "backfill:postal:commit": "tsx scripts/backfill-postal-codes.ts --commit",
+    "backfill:shipments:dry-run": "tsx scripts/backfill-shipments.ts",
+    "backfill:shipments:commit": "tsx scripts/backfill-shipments.ts --commit",
     "postinstall": "prisma generate"
   },
   "prisma": {

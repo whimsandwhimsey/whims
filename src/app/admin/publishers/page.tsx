@@ -41,7 +41,46 @@ export default async function PublishersPage({
       </div>
 
       <Card className="overflow-hidden">
-        <div className="overflow-x-auto">
+        {/* Mobile: compact cards */}
+        <div className="divide-y divide-border md:hidden">
+          {publishers.map((s) => (
+            <div key={s.id} className="p-4">
+              <div className="mb-1 flex items-center justify-between gap-2">
+                <p className="font-medium">{s.name}</p>
+                <form action={togglePublisherActive.bind(null, s.id, !s.isActive)}>
+                  <button
+                    type="submit"
+                    className={
+                      s.isActive
+                        ? 'rounded-full bg-success/15 px-2 py-0.5 text-[10px] font-medium text-success'
+                        : 'rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground'
+                    }
+                  >
+                    {s.isActive ? 'Active' : 'Archived'}
+                  </button>
+                </form>
+              </div>
+              <p className="mb-2 text-xs text-muted-foreground">{s._count.books} buku</p>
+              <div className="flex gap-1">
+                <Button variant="ghost" size="sm" asChild>
+                  <Link href={`/admin/publishers/${s.id}/edit`}>
+                    <Pencil className="h-4 w-4" />
+                  </Link>
+                </Button>
+                <DeleteButton
+                  action={deletePublisher.bind(null, s.id)}
+                  confirmMessage={`Hapus publisher "${s.name}"? Kalau masih dipakai di Buku, arsipkan aja.`}
+                />
+              </div>
+            </div>
+          ))}
+          {publishers.length === 0 && (
+            <p className="px-4 py-10 text-center text-sm text-muted-foreground">Belum ada publisher.</p>
+          )}
+        </div>
+
+        {/* Desktop: full table */}
+        <div className="hidden overflow-x-auto md:block">
           <table className="w-full text-sm">
             <thead className="bg-secondary text-left text-xs uppercase tracking-wide text-muted-foreground">
               <tr>

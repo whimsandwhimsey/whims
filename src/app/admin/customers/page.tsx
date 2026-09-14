@@ -125,7 +125,56 @@ export default async function CustomersPage({
       </div>
 
       <Card className="overflow-hidden">
-        <div className="overflow-x-auto">
+        {/* Mobile: compact cards */}
+        <div className="divide-y divide-border md:hidden">
+          {customers.map((c) => (
+            <div key={c.id} className="p-4">
+              <div className="mb-1 flex items-start justify-between gap-2">
+                <div>
+                  <Link href={`/admin/customers/${c.id}`} className="font-medium text-primary hover:underline">
+                    {c.name}
+                  </Link>
+                  <p className="text-xs text-muted-foreground">{c.phone}</p>
+                </div>
+                <span
+                  className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${STATUS_BADGE[c.status] ?? ''}`}
+                >
+                  {STATUS_LABEL[c.status] ?? c.status}
+                </span>
+              </div>
+              {c.address && <p className="mb-2 text-xs text-muted-foreground">{c.address}</p>}
+              <p className="mb-2 text-xs text-muted-foreground">{c._count.orders} order(s)</p>
+              <div className="flex flex-wrap items-center gap-1">
+                {c.status === 'PENDING' && (
+                  <>
+                    <ApproveCustomerButton customerId={c.id} customerName={c.name} customerPhone={c.phone} />
+                    <form action={rejectCustomer.bind(null, c.id)}>
+                      <Button type="submit" variant="ghost" size="sm" title="Reject">
+                        <X className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </form>
+                  </>
+                )}
+                <DepositTopUpForm customerId={c.id} />
+                <Button variant="ghost" size="sm" asChild>
+                  <Link href={`/admin/customers/${c.id}/edit`}>
+                    <Pencil className="h-4 w-4" />
+                  </Link>
+                </Button>
+                <DeleteButton
+                  action={deleteCustomer.bind(null, c.id)}
+                  confirmMessage={`Delete ${c.name}? If they have order history, they'll be archived instead (order records are kept) — otherwise they're removed permanently.`}
+                />
+              </div>
+            </div>
+          ))}
+          {customers.length === 0 && (
+            <p className="px-4 py-10 text-center text-sm text-muted-foreground">No customers found.</p>
+          )}
+        </div>
+
+        {/* Desktop: full table */}
+        <div className="hidden overflow-x-auto md:block">
           <table className="w-full text-sm">
             <thead className="bg-secondary text-left text-xs uppercase tracking-wide text-muted-foreground">
               <tr>

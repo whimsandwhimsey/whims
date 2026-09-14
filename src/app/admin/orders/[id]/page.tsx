@@ -51,6 +51,7 @@ export default async function OrderDetailPage({
       invoices: { orderBy: { issuedAt: 'desc' } },
       poBatch: true,
       supplier: true,
+      shipment: { include: { orders: { select: { orderNumber: true } } } },
     },
   });
   if (!order) notFound();
@@ -197,14 +198,14 @@ export default async function OrderDetailPage({
                 <div className="space-y-3">
                   {order.invoices.map((inv) => (
                     <div key={inv.id} className="rounded-md border border-border p-3">
-                      <div className="mb-2 flex items-center justify-between gap-2">
+                      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                         <Link
                           href={`/admin/invoices/${inv.id}`}
-                          className="text-sm font-medium hover:text-primary hover:underline"
+                          className="min-w-0 flex-1 text-sm font-medium hover:text-primary hover:underline"
                         >
                           {inv.invoiceNumber} · {INVOICE_TYPE_LABELS[inv.type] ?? inv.type}
                         </Link>
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex shrink-0 items-center gap-1.5">
                           <PaymentStatusBadge status={inv.paymentStatus} />
                           <span
                             className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${
@@ -257,11 +258,11 @@ export default async function OrderDetailPage({
               ) : (
                 <ul className="space-y-2 text-sm">
                   {order.payments.map((p) => (
-                    <li key={p.id} className="flex items-center justify-between gap-2">
-                      <span>
+                    <li key={p.id} className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="min-w-0">
                         {formatDate(p.date)} · {p.method === 'BANK_TRANSFER' ? 'Bank Transfer' : 'QRIS'}
                       </span>
-                      <span className="flex items-center gap-2">
+                      <span className="flex shrink-0 items-center gap-2">
                         <span className="font-medium">{formatCurrency(p.amount.toString())}</span>
                         <Link
                           href={`/admin/payments/${p.id}/edit?returnTo=/admin/orders/${order.id}`}
@@ -315,6 +316,37 @@ export default async function OrderDetailPage({
               <Row label="Actual arrival" value={formatDate(order.actualArrivalDate)} />
             </CardContent>
           </Card>
+
+          {order.shipment && (
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle>Shipping</CardTitle>
+                <PaymentStatusBadge status={order.shipment.paymentStatus} />
+              </CardHeader>
+              <CardContent className="space-y-1.5 text-sm">
+                <Row label="Courier" value={order.shipment.courier} />
+                <Row label="Tracking #" value={order.shipment.trackingNumber} />
+                <Row label="Ongkir" value={formatCurrency(order.shipment.shippingCost.toString())} />
+                <Row label="Ongkir outstanding" value={formatCurrency(order.shipment.outstandingBalance.toString())} />
+                {order.shipment.orders.length > 1 && (
+                  <p className="pt-1 text-xs text-muted-foreground">
+                    Resi ini digabung sama order:{' '}
+                    {order.shipment.orders
+                      .filter((o) => o.orderNumber !== order.orderNumber)
+                      .map((o) => o.orderNumber)
+                      .join(', ')}{' '}
+                    — status bayar ongkir sama buat semuanya.
+                  </p>
+                )}
+                <Link
+                  href={`/admin/shipments/${order.shipment.id}`}
+                  className="inline-block pt-1 text-xs text-primary underline underline-offset-2"
+                >
+                  Lihat detail shipment &amp; bayar ongkir →
+                </Link>
+              </CardContent>
+            </Card>
+          )}
         </div>
       </div>
     </div>

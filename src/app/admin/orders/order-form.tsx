@@ -84,6 +84,8 @@ type ExistingOrder = {
 
 const STATUS_LABELS: Record<string, string> = {
   WAITING: 'Waiting',
+  IN_TRANSIT: 'In transit',
+  ARRIVED_COUNTRY: 'Arrived in country',
   ARRIVED: 'Arrived',
   SHIPPED: 'Shipped',
   COMPLETED: 'Completed',
@@ -115,6 +117,16 @@ export function OrderForm({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  // Keyed by field path — e.g. "poMonth" or "items.0.bookTitle" — so each
+  // invalid field can show its own red border + message instead of one
+  // generic line at the bottom the person has to hunt for.
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  function fieldError(path: string): string | undefined {
+    return fieldErrors[path];
+  }
+  function errClass(path: string): string {
+    return fieldErrors[path] ? 'border-destructive' : '';
+  }
 
   const [customerId, setCustomerId] = useState(order?.customerId ?? '');
   const [localCustomers, setLocalCustomers] = useState<Customer[]>(customers);
@@ -305,17 +317,22 @@ export function OrderForm({
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    setFieldErrors({});
 
     if (!customerId) {
       setError('Please select a customer.');
+      setFieldErrors({ customerId: 'Pilih customer dulu.' });
       return;
     }
     if (needsPoMonth && !poMonth) {
       setError('PO month is required for PO reguler / remainder orders.');
+      setFieldErrors({ poMonth: 'Wajib diisi buat order PO reguler / remainder.' });
       return;
     }
-    if (items.some((it) => !it.bookTitle.trim())) {
+    const emptyTitleIndex = items.findIndex((it) => !it.bookTitle.trim());
+    if (emptyTitleIndex !== -1) {
       setError('Every item needs a book title.');
+      setFieldErrors({ [`items.${emptyTitleIndex}.bookTitle`]: 'Judul buku wajib diisi.' });
       return;
     }
 
@@ -352,6 +369,7 @@ export function OrderForm({
       const result = await saveOrder(payload);
       if (!result.success) {
         setError(result.error);
+        setFieldErrors(result.fieldErrors ?? {});
         return;
       }
       if (result.merged) {
@@ -382,6 +400,9 @@ export function OrderForm({
               placeholder="Select a customer…"
               emptyLabel="— None selected —"
             />
+            {fieldError('customerId') && (
+              <p className="text-xs text-destructive">{fieldError('customerId')}</p>
+            )}
             {showNewCustomerForm && (
               <div className="mt-2 space-y-3 rounded-md border border-border bg-secondary/50 p-3">
                 <p className="text-sm font-medium">New customer</p>
@@ -446,6 +467,7 @@ export function OrderForm({
               id="orderType"
               value={orderType}
               onChange={(e) => setOrderType(e.target.value)}
+              className={errClass('orderType')}
             >
               {orderTypeValues.map((t) => (
                 <option key={t} value={t}>
@@ -453,6 +475,7 @@ export function OrderForm({
                 </option>
               ))}
             </Select>
+            {fieldError('orderType') && <p className="text-xs text-destructive">{fieldError('orderType')}</p>}
           </div>
 
           {orderType === 'EVENT_JASTIP' && (
@@ -489,7 +512,9 @@ export function OrderForm({
                   onChange={(e) => setPoMonth(e.target.value)}
                   disabled={!!existingBatchId}
                   required
+                  className={errClass('poMonth')}
                 />
+                {fieldError('poMonth') && <p className="text-xs text-destructive">{fieldError('poMonth')}</p>}
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="etaMonth">ETA month</Label>
@@ -499,7 +524,9 @@ export function OrderForm({
                   value={etaMonth}
                   onChange={(e) => setEtaMonth(e.target.value)}
                   disabled={!!existingBatchId}
+                  className={errClass('etaMonth')}
                 />
+                {fieldError('etaMonth') && <p className="text-xs text-destructive">{fieldError('etaMonth')}</p>}
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="supplierId">Supplier</Label>
@@ -533,7 +560,9 @@ export function OrderForm({
                   value={dpValue}
                   onChange={(e) => setDpValue(e.target.value)}
                   required
+                  className={errClass('dpValue')}
                 />
+                {fieldError('dpValue') && <p className="text-xs text-destructive">{fieldError('dpValue')}</p>}
               </div>
               {!existingBatchId && (
                 <div className="space-y-1.5 sm:col-span-2">
@@ -558,13 +587,19 @@ export function OrderForm({
 
           <div className="space-y-1.5">
             <Label htmlFor="status">Status</Label>
-            <Select id="status" value={status} onChange={(e) => setStatus(e.target.value)}>
+            <Select
+              id="status"
+              value={status}
+              onChange={(e) => setStatus(e.target.value)}
+              className={errClass('status')}
+            >
               {orderStatusValues.map((s) => (
                 <option key={s} value={s}>
                   {STATUS_LABELS[s]}
                 </option>
               ))}
             </Select>
+            {fieldError('status') && <p className="text-xs text-destructive">{fieldError('status')}</p>}
           </div>
 
           <div className="space-y-1.5">
@@ -575,7 +610,9 @@ export function OrderForm({
               value={orderDate}
               onChange={(e) => setOrderDate(e.target.value)}
               required
+              className={errClass('orderDate')}
             />
+            {fieldError('orderDate') && <p className="text-xs text-destructive">{fieldError('orderDate')}</p>}
           </div>
 
           <div className="space-y-1.5">
@@ -613,7 +650,7 @@ export function OrderForm({
           </Button>
         </CardHeader>
         <CardContent className="space-y-4">
-          {items.map((row) => {
+          {items.map((row, index) => {
             const subtotal = computeItemSubtotal(row);
             return (
               <div key={row.key} className="rounded-md border border-border p-4">
@@ -648,7 +685,11 @@ export function OrderForm({
                       value={row.bookTitle}
                       onChange={(e) => updateItem(row.key, { bookTitle: e.target.value })}
                       required
+                      className={errClass(`items.${index}.bookTitle`)}
                     />
+                    {fieldError(`items.${index}.bookTitle`) && (
+                      <p className="text-xs text-destructive">{fieldError(`items.${index}.bookTitle`)}</p>
+                    )}
                   </div>
                   </div>
                 </div>
@@ -679,7 +720,11 @@ export function OrderForm({
                       min={1}
                       value={row.quantity}
                       onChange={(e) => updateItem(row.key, { quantity: Number(e.target.value) || 1 })}
+                      className={errClass(`items.${index}.quantity`)}
                     />
+                    {fieldError(`items.${index}.quantity`) && (
+                      <p className="text-xs text-destructive">{fieldError(`items.${index}.quantity`)}</p>
+                    )}
                   </div>
                   <div className="space-y-1.5">
                     <Label>Selling price</Label>
@@ -688,7 +733,11 @@ export function OrderForm({
                       min={0}
                       value={row.sellingPrice}
                       onChange={(e) => updateItem(row.key, { sellingPrice: Number(e.target.value) || 0 })}
+                      className={errClass(`items.${index}.sellingPrice`)}
                     />
+                    {fieldError(`items.${index}.sellingPrice`) && (
+                      <p className="text-xs text-destructive">{fieldError(`items.${index}.sellingPrice`)}</p>
+                    )}
                   </div>
                   <div className="space-y-1.5">
                     <Label>
@@ -699,7 +748,11 @@ export function OrderForm({
                       min={0}
                       value={row.cogs}
                       onChange={(e) => updateItem(row.key, { cogs: Number(e.target.value) || 0 })}
+                      className={errClass(`items.${index}.cogs`)}
                     />
+                    {fieldError(`items.${index}.cogs`) && (
+                      <p className="text-xs text-destructive">{fieldError(`items.${index}.cogs`)}</p>
+                    )}
                   </div>
                   <div className="space-y-1.5">
                     <Label>Discount</Label>
@@ -708,7 +761,11 @@ export function OrderForm({
                       min={0}
                       value={row.discount}
                       onChange={(e) => updateItem(row.key, { discount: Number(e.target.value) || 0 })}
+                      className={errClass(`items.${index}.discount`)}
                     />
+                    {fieldError(`items.${index}.discount`) && (
+                      <p className="text-xs text-destructive">{fieldError(`items.${index}.discount`)}</p>
+                    )}
                   </div>
                 </div>
 
@@ -734,7 +791,12 @@ export function OrderForm({
         </CardContent>
       </Card>
 
-      {error && <p className="text-sm text-destructive">{error}</p>}
+      {error && (
+        <p className="text-sm text-destructive">
+          {error}
+          {Object.keys(fieldErrors).length > 0 && ' Cek tanda merah di form ini buat lihat field mana yang bermasalah.'}
+        </p>
+      )}
 
       <div className="flex gap-3">
         <Button type="submit" disabled={isPending} className="w-full sm:w-auto">

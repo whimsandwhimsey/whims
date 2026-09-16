@@ -48,7 +48,7 @@ export type SaveOrderInput = {
 
 export type SaveOrderResult =
   | { success: true; orderId: string; orderNumber: string; merged: boolean }
-  | { success: false; error: string };
+  | { success: false; error: string; fieldErrors?: Record<string, string> };
 
 /**
  * Resolves the Book to link an order item to. If the item already points at
@@ -89,8 +89,20 @@ export async function saveOrder(input: SaveOrderInput): Promise<SaveOrderResult>
 
   const parsed = orderSchema.safeParse(input);
   if (!parsed.success) {
-    const firstError = Object.values(parsed.error.flatten().fieldErrors)[0]?.[0];
-    return { success: false, error: firstError ?? 'Please check the form for errors.' };
+    // Keyed by path so the client can flag the exact field — e.g.
+    // "poMonth" or "items.0.bookTitle" — instead of showing one generic
+    // line the person has to hunt for.
+    const fieldErrors: Record<string, string> = {};
+    for (const issue of parsed.error.issues) {
+      const key = issue.path.join('.');
+      if (!fieldErrors[key]) fieldErrors[key] = issue.message;
+    }
+    const firstError = Object.values(fieldErrors)[0];
+    return {
+      success: false,
+      error: firstError ?? 'Ada bagian yang belum valid — lihat tanda merah di form.',
+      fieldErrors,
+    };
   }
   const data = parsed.data;
 

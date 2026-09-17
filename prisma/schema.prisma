@@ -259,6 +259,12 @@ model PurchaseBatch {
   supplierId          String?
   supplier            Supplier?   @relation(fields: [supplierId], references: [id])
 
+  // DP rule locked at the batch level — every order added to this batch
+  // shares the same terms, auto-filled (and locked) in the order form
+  // instead of being re-entered per order.
+  dpType              DpType?
+  dpValue             Decimal?    @db.Decimal(12, 2)
+
   orders              Order[]
 
   @@index([type])

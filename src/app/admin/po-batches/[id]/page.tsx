@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft, Pencil } from 'lucide-react';
+import { ArrowLeft, Pencil, Plus } from 'lucide-react';
 import { prisma } from '@/lib/prisma';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -93,6 +93,13 @@ export default async function PoBatchDetailPage({
           <ArrowLeft className="h-4 w-4" /> Back to PO batches
         </Link>
         <div className="flex flex-wrap gap-2">
+          {batch.isOpen && (
+            <Button size="sm" asChild>
+              <Link href={`/admin/orders/new?batchId=${batch.id}`}>
+                <Plus className="h-4 w-4" /> Add order to this batch
+              </Link>
+            </Button>
+          )}
           <ExportBuilderButton batchId={batch.id} />
           <form action={togglePoBatchOpen.bind(null, batch.id, !batch.isOpen)}>
             <Button

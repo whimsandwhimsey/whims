@@ -84,6 +84,57 @@ async function resolveOrCreateBookId(
   return created.id;
 }
 
+/**
+ * Resolves the PurchaseBatch for a PO reguler/remainder order and returns
+ * the DP terms to actually save — always the BATCH's own dpType/dpValue,
+ * never whatever the order form submitted. This is what makes DP rule
+ * "locked at the batch": the first order into a batch sets it (via
+ * findOrCreatePurchaseBatch), and every order after that — whether it's
+ * joining an existing batch picked from the dropdown or auto-merging via
+ * findMergeableOrder — inherits the same terms whether the person touched
+ * the DP fields or not.
+ */
+async function resolveBatchAndDp(
+  tx: Prisma.TransactionClient,
+  data: {
+    orderType: string;
+    poMonth: string | null | undefined;
+    etaMonth: string | null | undefined;
+    supplierId: string | null | undefined;
+    existingBatchId?: string;
+    dpType?: string;
+    dpValue?: number;
+  },
+  newBatchName?: string
+): Promise<{ batchId: string | null; dpType: string | null; dpValue: number | null }> {
+  if (!isMergeableOrderType(data.orderType)) {
+    return { batchId: null, dpType: null, dpValue: null };
+  }
+
+  const batch = data.existingBatchId
+    ? await tx.purchaseBatch.findUnique({ where: { id: data.existingBatchId } })
+    : await findOrCreatePurchaseBatch(
+        tx,
+        {
+          orderType: data.orderType,
+          poMonth: data.poMonth || null,
+          etaMonth: data.etaMonth || null,
+          supplierId: data.supplierId || null,
+          dpType: data.dpType || null,
+          dpValue: data.dpValue ?? null,
+        },
+        newBatchName
+      );
+
+  if (!batch) return { batchId: null, dpType: null, dpValue: null };
+
+  return {
+    batchId: batch.id,
+    dpType: batch.dpType ?? null,
+    dpValue: batch.dpValue !== null && batch.dpValue !== undefined ? Number(batch.dpValue.toString()) : null,
+  };
+}
+
 export async function saveOrder(input: SaveOrderInput): Promise<SaveOrderResult> {
   const session = await requireStaffSession();
 
@@ -138,19 +189,20 @@ export async function saveOrder(input: SaveOrderInput): Promise<SaveOrderResult>
           }))
         );
 
-        const resolvedPoBatchId = isMergeableOrderType(data.orderType)
-          ? data.existingBatchId ||
-            (await findOrCreatePurchaseBatch(
-              tx,
-              {
-                orderType: data.orderType,
-                poMonth: data.poMonth || null,
-                etaMonth: data.etaMonth || null,
-                supplierId: data.supplierId || null,
-              },
-              data.newBatchName
-            ))
-          : null;
+        const { batchId: resolvedPoBatchId, dpType: lockedDpType, dpValue: lockedDpValue } =
+          await resolveBatchAndDp(
+            tx,
+            {
+              orderType: data.orderType,
+              poMonth: data.poMonth,
+              etaMonth: data.etaMonth,
+              supplierId: data.supplierId,
+              existingBatchId: data.existingBatchId,
+              dpType: data.dpType,
+              dpValue: data.dpValue,
+            },
+            data.newBatchName
+          );
 
         return tx.order.update({
           where: { id: input.id },
@@ -160,8 +212,8 @@ export async function saveOrder(input: SaveOrderInput): Promise<SaveOrderResult>
             poMonth: isMergeableOrderType(data.orderType) ? data.poMonth || null : null,
             etaMonth: data.etaMonth || null,
             eventName: data.orderType === 'EVENT_JASTIP' ? data.eventName || null : null,
-            dpType: isMergeableOrderType(data.orderType) ? (data.dpType as any) || null : null,
-            dpValue: isMergeableOrderType(data.orderType) ? data.dpValue ?? null : null,
+            dpType: lockedDpType as any,
+            dpValue: lockedDpValue,
             supplierId: data.supplierId || null,
             poBatchId: resolvedPoBatchId,
             orderDate: new Date(data.orderDate),
@@ -296,19 +348,20 @@ export async function saveOrder(input: SaveOrderInput): Promise<SaveOrderResult>
         }))
       );
 
-      const resolvedPoBatchId = isMergeableOrderType(data.orderType)
-        ? data.existingBatchId ||
-          (await findOrCreatePurchaseBatch(
-            tx,
-            {
-              orderType: data.orderType,
-              poMonth: data.poMonth || null,
-              etaMonth: data.etaMonth || null,
-              supplierId: data.supplierId || null,
-            },
-            data.newBatchName
-          ))
-        : null;
+      const { batchId: resolvedPoBatchId, dpType: lockedDpType, dpValue: lockedDpValue } =
+        await resolveBatchAndDp(
+          tx,
+          {
+            orderType: data.orderType,
+            poMonth: data.poMonth,
+            etaMonth: data.etaMonth,
+            supplierId: data.supplierId,
+            existingBatchId: data.existingBatchId,
+            dpType: data.dpType,
+            dpValue: data.dpValue,
+          },
+          data.newBatchName
+        );
 
       return tx.order.create({
         data: {
@@ -318,8 +371,8 @@ export async function saveOrder(input: SaveOrderInput): Promise<SaveOrderResult>
           poMonth: isMergeableOrderType(data.orderType) ? data.poMonth || null : null,
           etaMonth: data.etaMonth || null,
           eventName: data.orderType === 'EVENT_JASTIP' ? data.eventName || null : null,
-          dpType: isMergeableOrderType(data.orderType) ? (data.dpType as any) || null : null,
-          dpValue: isMergeableOrderType(data.orderType) ? data.dpValue ?? null : null,
+          dpType: lockedDpType as any,
+          dpValue: lockedDpValue,
           supplierId: data.supplierId || null,
           poBatchId: resolvedPoBatchId,
           orderDate: new Date(data.orderDate),

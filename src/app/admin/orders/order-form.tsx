@@ -39,6 +39,8 @@ type OpenBatch = {
   poMonth: string | null;
   etaMonth: string | null;
   supplierId: string | null;
+  dpType: string | null;
+  dpValue: unknown;
 };
 
 type ItemRow = {
@@ -107,12 +109,17 @@ export function OrderForm({
   suppliers,
   openBatches,
   order,
+  initialBatchId,
 }: {
   customers: Customer[];
   books: Book[];
   suppliers: Supplier[];
   openBatches: OpenBatch[];
   order?: ExistingOrder;
+  /** Pre-selects a PO batch — used when starting a new order from that
+   * batch's own detail page ("+ Add order to this batch"), so the person
+   * doesn't have to pick it again from the dropdown. */
+  initialBatchId?: string;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -128,6 +135,8 @@ export function OrderForm({
     return fieldErrors[path] ? 'border-destructive' : '';
   }
 
+  const initialBatch = initialBatchId ? openBatches.find((b) => b.id === initialBatchId) : undefined;
+
   const [customerId, setCustomerId] = useState(order?.customerId ?? '');
   const [localCustomers, setLocalCustomers] = useState<Customer[]>(customers);
   const [showNewCustomerForm, setShowNewCustomerForm] = useState(false);
@@ -136,17 +145,21 @@ export function OrderForm({
   const [newCustomerAddress, setNewCustomerAddress] = useState('');
   const [newCustomerError, setNewCustomerError] = useState<string | null>(null);
   const [isCreatingCustomer, startCreatingCustomer] = useTransition();
-  const [orderType, setOrderType] = useState(order?.orderType ?? 'READY_STOCK');
-  const [poMonth, setPoMonth] = useState(order?.poMonth ?? '');
-  const [etaMonth, setEtaMonth] = useState(order?.etaMonth ?? '');
+  const [orderType, setOrderType] = useState(order?.orderType ?? initialBatch?.type ?? 'READY_STOCK');
+  const [poMonth, setPoMonth] = useState(order?.poMonth ?? initialBatch?.poMonth ?? '');
+  const [etaMonth, setEtaMonth] = useState(order?.etaMonth ?? initialBatch?.etaMonth ?? '');
   const [eventName, setEventName] = useState(order?.eventName ?? '');
-  const [supplierId, setSupplierId] = useState(order?.supplierId ?? '');
-  const [dpType, setDpType] = useState(order?.dpType ?? 'PERCENTAGE');
+  const [supplierId, setSupplierId] = useState(order?.supplierId ?? initialBatch?.supplierId ?? '');
+  const [dpType, setDpType] = useState(order?.dpType ?? initialBatch?.dpType ?? 'PERCENTAGE');
   const [dpValue, setDpValue] = useState(
-    order?.dpValue !== undefined && order?.dpValue !== null ? String(toNumber(order.dpValue as any)) : '25'
+    order?.dpValue !== undefined && order?.dpValue !== null
+      ? String(toNumber(order.dpValue as any))
+      : initialBatch?.dpValue !== undefined && initialBatch?.dpValue !== null
+        ? String(toNumber(initialBatch.dpValue as any))
+        : '25'
   );
   const [newBatchName, setNewBatchName] = useState('');
-  const [existingBatchId, setExistingBatchId] = useState((order as any)?.poBatchId ?? '');
+  const [existingBatchId, setExistingBatchId] = useState((order as any)?.poBatchId ?? initialBatch?.id ?? '');
   const [orderDate, setOrderDate] = useState(
     toDateInputValue(order?.orderDate) || new Date().toISOString().slice(0, 10)
   );
@@ -259,6 +272,13 @@ export function OrderForm({
     if (batch.poMonth) setPoMonth(batch.poMonth);
     if (batch.etaMonth) setEtaMonth(batch.etaMonth);
     if (batch.supplierId) setSupplierId(batch.supplierId);
+    // DP rule is locked at the batch level — every order in it shares the
+    // same terms, so pull them in here instead of leaving whatever was
+    // typed before switching batches.
+    if (batch.dpType) setDpType(batch.dpType);
+    if (batch.dpValue !== null && batch.dpValue !== undefined) {
+      setDpValue(String(toNumber(batch.dpValue as any)));
+    }
   }
   const bookOptions = useMemo(
     () =>
@@ -541,8 +561,15 @@ export function OrderForm({
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="dpType">DP rule</Label>
-                <Select id="dpType" value={dpType} onChange={(e) => setDpType(e.target.value)}>
+                <Label htmlFor="dpType">
+                  DP rule {existingBatchId && <span className="text-muted-foreground">(dari batch)</span>}
+                </Label>
+                <Select
+                  id="dpType"
+                  value={dpType}
+                  onChange={(e) => setDpType(e.target.value)}
+                  disabled={!!existingBatchId}
+                >
                   <option value="PERCENTAGE">Persen dari total</option>
                   <option value="FIXED_PER_BOOK">Rupiah tetap per buku</option>
                   <option value="FIXED_TOTAL">Rupiah tetap total order</option>
@@ -560,9 +587,15 @@ export function OrderForm({
                   value={dpValue}
                   onChange={(e) => setDpValue(e.target.value)}
                   required
+                  disabled={!!existingBatchId}
                   className={errClass('dpValue')}
                 />
                 {fieldError('dpValue') && <p className="text-xs text-destructive">{fieldError('dpValue')}</p>}
+                {existingBatchId && (
+                  <p className="text-xs text-muted-foreground">
+                    DP dikunci dari PO batch ini — sama buat semua order di batch yang sama.
+                  </p>
+                )}
               </div>
               {!existingBatchId && (
                 <div className="space-y-1.5 sm:col-span-2">

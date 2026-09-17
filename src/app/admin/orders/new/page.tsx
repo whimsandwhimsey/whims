@@ -3,7 +3,7 @@ import { ArrowLeft } from 'lucide-react';
 import { prisma } from '@/lib/prisma';
 import { OrderForm } from '../order-form';
 
-export default async function NewOrderPage() {
+export default async function NewOrderPage({ searchParams }: { searchParams: { batchId?: string } }) {
   const [customers, books, suppliers, openBatches] = await Promise.all([
     prisma.customer.findMany({ orderBy: { name: 'asc' }, select: { id: true, name: true, phone: true } }),
     prisma.book.findMany({
@@ -16,10 +16,9 @@ export default async function NewOrderPage() {
       where: {
         isOpen: true,
         type: { in: ['PO_REGULAR', 'PO_REMAINDER'] },
-        orders: { none: { status: { in: ['ARRIVED', 'SHIPPED', 'COMPLETED'] } } },
       },
       orderBy: { createdAt: 'desc' },
-      select: { id: true, name: true, type: true, poMonth: true, etaMonth: true, supplierId: true },
+      select: { id: true, name: true, type: true, poMonth: true, etaMonth: true, supplierId: true, dpType: true, dpValue: true },
     }),
   ]);
 
@@ -35,7 +34,13 @@ export default async function NewOrderPage() {
       <h1 className="mb-6 font-display text-2xl font-semibold text-primary">New order</h1>
 
       <div className="max-w-3xl">
-        <OrderForm customers={customers} books={books} suppliers={suppliers} openBatches={openBatches} />
+        <OrderForm
+          customers={customers}
+          books={books}
+          suppliers={suppliers}
+          openBatches={openBatches}
+          initialBatchId={searchParams.batchId}
+        />
       </div>
     </div>
   );

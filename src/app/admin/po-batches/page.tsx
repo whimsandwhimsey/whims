@@ -6,6 +6,7 @@ import { Card } from '@/components/ui/card';
 import { formatDate } from '@/lib/utils';
 import { MultiSelectFilter } from '@/components/multi-select-filter';
 import { SortSelect } from '@/components/sort-select';
+import { SearchBox } from '@/components/search-box';
 
 const TYPE_LABELS: Record<string, string> = {
   PO_REGULAR: 'PO Reguler',
@@ -27,22 +28,43 @@ const INVOICE_STATUS_LABELS: Record<string, string> = {
   sent: 'Invoice terkirim',
 };
 
+const OPEN_STATUS_LABELS: Record<string, string> = {
+  open: 'Open',
+  closed: 'Closed',
+};
+
 export default async function PoBatchesPage({
   searchParams,
 }: {
-  searchParams: { sort?: string; paymentStatus?: string; invoiceStatus?: string };
+  searchParams: {
+    q?: string;
+    sort?: string;
+    paymentStatus?: string;
+    invoiceStatus?: string;
+    supplier?: string;
+    openStatus?: string;
+  };
 }) {
-  const sort = searchParams.sort === 'name_asc' || searchParams.sort === 'name_desc' ? searchParams.sort : 'recent';
+  const q = searchParams.q?.trim().toLowerCase() ?? '';
+  const sort = ['name_asc', 'name_desc', 'eta_asc', 'eta_desc'].includes(searchParams.sort ?? '')
+    ? searchParams.sort!
+    : 'recent';
   const paymentStatuses = (searchParams.paymentStatus ?? '').split(',').filter(Boolean);
   const invoiceStatuses = (searchParams.invoiceStatus ?? '').split(',').filter(Boolean);
+  const supplierIds = (searchParams.supplier ?? '').split(',').filter(Boolean);
+  const openStatuses = (searchParams.openStatus ?? '').split(',').filter(Boolean);
 
-  const allBatches = await prisma.purchaseBatch.findMany({
-    orderBy: { batchDate: 'desc' },
-    include: {
-      _count: { select: { orders: true } },
-      orders: { select: { paymentStatus: true, invoices: { select: { sentAt: true } } } },
-    },
-  });
+  const [allBatches, suppliers] = await Promise.all([
+    prisma.purchaseBatch.findMany({
+      orderBy: { batchDate: 'desc' },
+      include: {
+        supplier: { select: { id: true, name: true } },
+        _count: { select: { orders: true } },
+        orders: { select: { paymentStatus: true, invoices: { select: { sentAt: true } } } },
+      },
+    }),
+    prisma.supplier.findMany({ where: { isActive: true }, orderBy: { name: 'asc' }, select: { id: true, name: true } }),
+  ]);
 
   function invoiceStatusesOfBatch(b: (typeof allBatches)[number]): Set<string> {
     const set = new Set<string>();
@@ -55,6 +77,11 @@ export default async function PoBatchesPage({
   }
 
   let batches = allBatches;
+  if (q) {
+    batches = batches.filter(
+      (b) => b.name.toLowerCase().includes(q) || (b.supplier?.name ?? '').toLowerCase().includes(q)
+    );
+  }
   if (paymentStatuses.length > 0) {
     batches = batches.filter((b) => b.orders.some((o) => paymentStatuses.includes(o.paymentStatus)));
   }
@@ -64,9 +91,18 @@ export default async function PoBatchesPage({
       return invoiceStatuses.some((s) => statuses.has(s));
     });
   }
+  if (supplierIds.length > 0) {
+    batches = batches.filter((b) => b.supplierId && supplierIds.includes(b.supplierId));
+  }
+  if (openStatuses.length > 0) {
+    batches = batches.filter((b) => openStatuses.includes(b.isOpen ? 'open' : 'closed'));
+  }
+
   batches = [...batches].sort((a, b) => {
     if (sort === 'name_asc') return a.name.localeCompare(b.name);
     if (sort === 'name_desc') return b.name.localeCompare(a.name);
+    if (sort === 'eta_asc') return (a.etaMonth ?? '9999').localeCompare(b.etaMonth ?? '9999');
+    if (sort === 'eta_desc') return (b.etaMonth ?? '0000').localeCompare(a.etaMonth ?? '0000');
     return b.batchDate.getTime() - a.batchDate.getTime();
   });
 
@@ -85,6 +121,17 @@ export default async function PoBatchesPage({
       </div>
 
       <div className="mb-4 flex flex-wrap gap-3">
+        <SearchBox placeholder="Cari nama batch atau supplier…" />
+        <MultiSelectFilter
+          paramKey="supplier"
+          label="Supplier"
+          options={suppliers.map((s) => ({ value: s.id, label: s.name }))}
+        />
+        <MultiSelectFilter
+          paramKey="openStatus"
+          label="Status"
+          options={Object.entries(OPEN_STATUS_LABELS).map(([value, label]) => ({ value, label }))}
+        />
         <MultiSelectFilter
           paramKey="paymentStatus"
           label="Payment"
@@ -98,9 +145,11 @@ export default async function PoBatchesPage({
         <SortSelect
           defaultValue="recent"
           options={[
-            { value: 'recent', label: 'Terbaru dulu' },
+            { value: 'recent', label: 'Tanggal dibuka (terbaru)' },
             { value: 'name_asc', label: 'Nama (A-Z)' },
             { value: 'name_desc', label: 'Nama (Z-A)' },
+            { value: 'eta_asc', label: 'ETA (terdekat)' },
+            { value: 'eta_desc', label: 'ETA (terjauh)' },
           ]}
         />
       </div>
@@ -123,8 +172,9 @@ export default async function PoBatchesPage({
                 <p className="text-sm text-muted-foreground">{b._count.orders} order(s)</p>
               </div>
               <p className="text-xs text-muted-foreground">
-                {TYPE_LABELS[b.type]} · Opened {formatDate(b.batchDate)}
-                {b.expectedArrivalDate ? ` · Expected ${formatDate(b.expectedArrivalDate)}` : ''}
+                {TYPE_LABELS[b.type]}
+                {b.supplier ? ` · ${b.supplier.name}` : ''} · Opened {formatDate(b.batchDate)}
+                {b.etaMonth ? ` · ETA ${b.etaMonth}` : ''}
               </p>
             </Card>
           </Link>

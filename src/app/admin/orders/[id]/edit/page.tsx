@@ -21,10 +21,9 @@ export default async function EditOrderPage({ params }: { params: { id: string }
       where: {
         isOpen: true,
         type: { in: ['PO_REGULAR', 'PO_REMAINDER'] },
-        orders: { none: { status: { in: ['ARRIVED', 'SHIPPED', 'COMPLETED'] } } },
       },
       orderBy: { createdAt: 'desc' },
-      select: { id: true, name: true, type: true, poMonth: true, etaMonth: true, supplierId: true },
+      select: { id: true, name: true, type: true, poMonth: true, etaMonth: true, supplierId: true, dpType: true, dpValue: true },
     }),
   ]);
 

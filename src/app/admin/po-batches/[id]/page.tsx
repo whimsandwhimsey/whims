@@ -182,7 +182,10 @@ export default async function PoBatchDetailPage({
           <CardTitle className="text-base">Bulk invoicing</CardTitle>
         </CardHeader>
         <CardContent>
-          <GenerateInvoicesButton batchId={batch.id} />
+          <GenerateInvoicesButton
+            batchId={batch.id}
+            isPoType={batch.type === 'PO_REGULAR' || batch.type === 'PO_REMAINDER'}
+          />
         </CardContent>
       </Card>
 

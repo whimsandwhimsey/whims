@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { useFormState, useFormStatus } from 'react-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,6 +16,8 @@ type Batch = {
   batchDate: Date;
   expectedArrivalDate: Date | null;
   notes: string | null;
+  dpType: string | null;
+  dpValue: unknown;
 };
 
 function toDateInputValue(d: Date | null | undefined): string {
@@ -30,6 +33,10 @@ export function PoBatchForm({
   batch?: Batch;
 }) {
   const [state, formAction] = useFormState(action, null);
+  const [type, setType] = useState(batch?.type ?? 'PO_REGULAR');
+  const [dpType, setDpType] = useState(batch?.dpType ?? 'PERCENTAGE');
+  const isPoType = type === 'PO_REGULAR' || type === 'PO_REMAINDER';
+  const hasOrders = !!batch; // editing an existing batch — changing DP here affects every order already in it
 
   return (
     <form action={formAction} className="space-y-5">
@@ -41,7 +48,7 @@ export function PoBatchForm({
 
       <div className="space-y-1.5">
         <Label htmlFor="type">Type</Label>
-        <Select id="type" name="type" defaultValue={batch?.type ?? 'PO_REGULAR'} required>
+        <Select id="type" name="type" value={type} onChange={(e) => setType(e.target.value)} required>
           <option value="PO_REGULAR">PO Reguler</option>
           <option value="PO_REMAINDER">PO Remainder</option>
           <option value="READY_STOCK">Ready Stock</option>
@@ -49,6 +56,37 @@ export function PoBatchForm({
         </Select>
         <FieldError errors={state?.errors?.type} />
       </div>
+
+      {isPoType && (
+        <div className="grid gap-4 rounded-md border border-border p-3 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label htmlFor="dpType">DP rule</Label>
+            <Select id="dpType" name="dpType" value={dpType} onChange={(e) => setDpType(e.target.value)}>
+              <option value="PERCENTAGE">Persen dari total</option>
+              <option value="FIXED_PER_BOOK">Rupiah tetap per buku</option>
+              <option value="FIXED_TOTAL">Rupiah tetap total order</option>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="dpValue">{dpType === 'PERCENTAGE' ? 'DP (%)' : 'DP (Rp)'}</Label>
+            <Input
+              id="dpValue"
+              name="dpValue"
+              type="number"
+              min="0"
+              step={dpType === 'PERCENTAGE' ? '1' : '1000'}
+              defaultValue={
+                batch?.dpValue !== null && batch?.dpValue !== undefined ? String(batch.dpValue) : '25'
+              }
+            />
+          </div>
+          {hasOrders && (
+            <p className="text-xs text-muted-foreground sm:col-span-2">
+              Ubah DP di sini bakal ikut ngubah DP di SEMUA order yang udah ada di batch ini.
+            </p>
+          )}
+        </div>
+      )}
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-1.5">

@@ -16,6 +16,8 @@ const batchSchema = z.object({
   batchDate: z.string().min(1),
   expectedArrivalDate: z.string().optional().or(z.literal('')),
   notes: z.string().max(1000).optional().or(z.literal('')),
+  dpType: z.enum(['PERCENTAGE', 'FIXED_PER_BOOK', 'FIXED_TOTAL']).optional().or(z.literal('')),
+  dpValue: z.coerce.number().min(0).optional().or(z.literal('')),
 });
 
 export type FormState = { errors?: Record<string, string[]> } | null;
@@ -27,6 +29,8 @@ function parseBatchForm(formData: FormData) {
     batchDate: formData.get('batchDate'),
     expectedArrivalDate: formData.get('expectedArrivalDate') ?? '',
     notes: formData.get('notes') ?? '',
+    dpType: formData.get('dpType') ?? '',
+    dpValue: formData.get('dpValue') ?? '',
   });
 }
 
@@ -35,6 +39,7 @@ export async function createPoBatch(_prevState: FormState, formData: FormData): 
   const parsed = parseBatchForm(formData);
   if (!parsed.success) return { errors: parsed.error.flatten().fieldErrors };
 
+  const isPoType = parsed.data.type === 'PO_REGULAR' || parsed.data.type === 'PO_REMAINDER';
   const batch = await prisma.purchaseBatch.create({
     data: {
       name: parsed.data.name,
@@ -42,6 +47,8 @@ export async function createPoBatch(_prevState: FormState, formData: FormData): 
       batchDate: new Date(parsed.data.batchDate),
       expectedArrivalDate: parsed.data.expectedArrivalDate ? new Date(parsed.data.expectedArrivalDate) : null,
       notes: parsed.data.notes || null,
+      dpType: isPoType && parsed.data.dpType ? (parsed.data.dpType as any) : null,
+      dpValue: isPoType && parsed.data.dpValue !== '' && parsed.data.dpValue !== undefined ? parsed.data.dpValue : null,
     },
   });
 
@@ -62,6 +69,7 @@ export async function updatePoBatch(id: string, _prevState: FormState, formData:
   const parsed = parseBatchForm(formData);
   if (!parsed.success) return { errors: parsed.error.flatten().fieldErrors };
 
+  const isPoType = parsed.data.type === 'PO_REGULAR' || parsed.data.type === 'PO_REMAINDER';
   const before = await prisma.purchaseBatch.findUnique({ where: { id } });
   const batch = await prisma.purchaseBatch.update({
     where: { id },
@@ -71,6 +79,8 @@ export async function updatePoBatch(id: string, _prevState: FormState, formData:
       batchDate: new Date(parsed.data.batchDate),
       expectedArrivalDate: parsed.data.expectedArrivalDate ? new Date(parsed.data.expectedArrivalDate) : null,
       notes: parsed.data.notes || null,
+      dpType: isPoType && parsed.data.dpType ? (parsed.data.dpType as any) : null,
+      dpValue: isPoType && parsed.data.dpValue !== '' && parsed.data.dpValue !== undefined ? parsed.data.dpValue : null,
     },
   });
 
@@ -89,6 +99,17 @@ export async function updatePoBatch(id: string, _prevState: FormState, formData:
     await prisma.order.updateMany({
       where: { poBatchId: id },
       data: { expectedArrivalDate: batch.expectedArrivalDate },
+    });
+    revalidatePath('/admin/orders');
+  }
+
+  // DP rule is locked at the batch level — if it changes here, every order
+  // already in the batch needs to reflect the same terms, not just new
+  // orders added after the edit.
+  if (isPoType) {
+    await prisma.order.updateMany({
+      where: { poBatchId: id },
+      data: { dpType: batch.dpType, dpValue: batch.dpValue },
     });
     revalidatePath('/admin/orders');
   }
@@ -138,14 +159,20 @@ export async function deletePoBatch(id: string) {
 export type GenerateInvoicesResult = { created: number; skipped: number; errors: string[] };
 
 /**
- * Generates one invoice per order in a PO batch:
- *   - READY_STOCK / EVENT_JASTIP batches: full-amount invoice for each order.
- *   - PO_REGULAR / PO_REMAINDER batches: DEPOSIT invoice per order, amount
- *     computed from that order's own dpType/dpValue rule (set when the
- *     order was created — see order-form.tsx).
- * Orders that already have an invoice of the applicable type are skipped.
+ * Generates one invoice per order in a PO batch, for whichever invoice
+ * type the person picks:
+ *   - DEPOSIT: amount from that order's own dpType/dpValue rule (locked
+ *     at the batch level — see PoBatchForm/updatePoBatch).
+ *   - FINAL_PAYMENT / READY_STOCK (full payment): the order's remaining
+ *     balance — totalAmount minus whatever's already been invoiced —
+ *     never just totalAmount outright, so a batch that already got DP
+ *     invoices doesn't get double-billed for the full amount again.
+ * Orders that already have an invoice of the chosen type are skipped.
  */
-export async function generateInvoicesForBatch(batchId: string): Promise<GenerateInvoicesResult> {
+export async function generateInvoicesForBatch(
+  batchId: string,
+  invoiceType: 'DEPOSIT' | 'FINAL_PAYMENT' | 'READY_STOCK'
+): Promise<GenerateInvoicesResult> {
   const session = await requireStaffSession();
 
   const batch = await prisma.purchaseBatch.findUnique({ where: { id: batchId } });
@@ -155,9 +182,6 @@ export async function generateInvoicesForBatch(batchId: string): Promise<Generat
     where: { poBatchId: batchId },
     include: { items: true, invoices: true },
   });
-
-  const isPoType = batch.type === 'PO_REGULAR' || batch.type === 'PO_REMAINDER';
-  const invoiceType = isPoType ? 'DEPOSIT' : 'READY_STOCK';
 
   let created = 0;
   let skipped = 0;
@@ -173,14 +197,16 @@ export async function generateInvoicesForBatch(batchId: string): Promise<Generat
 
     const totalAmount = toNumber(order.totalAmount);
     const totalQuantity = order.items.reduce((sum, item) => sum + item.quantity, 0);
+    const alreadyInvoiced = order.invoices.reduce((sum, inv) => sum + toNumber(inv.amount), 0);
 
-    const amount = isPoType
-      ? computeDpAmount(
-          { dpType: order.dpType as any, dpValue: order.dpValue ? toNumber(order.dpValue) : null },
-          totalAmount,
-          totalQuantity
-        )
-      : totalAmount;
+    const amount =
+      invoiceType === 'DEPOSIT'
+        ? computeDpAmount(
+            { dpType: order.dpType as any, dpValue: order.dpValue ? toNumber(order.dpValue) : null },
+            totalAmount,
+            totalQuantity
+          )
+        : Math.max(0, Math.round(totalAmount - alreadyInvoiced));
 
     if (amount <= 0) {
       skipped++;
@@ -208,7 +234,7 @@ export async function generateInvoicesForBatch(batchId: string): Promise<Generat
     userId: session.user.id,
     action: 'CREATE',
     entityType: 'Invoice',
-    summary: `Bulk-generated invoices for PO batch "${batch.name}": ${created} created, ${skipped} skipped`,
+    summary: `Bulk-generated ${invoiceType} invoices for PO batch "${batch.name}": ${created} created, ${skipped} skipped`,
   });
 
   revalidatePath(`/admin/po-batches/${batchId}`);

@@ -3,17 +3,27 @@
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
+import { Select } from '@/components/ui/select';
 import { generateInvoicesForBatch, type GenerateInvoicesResult } from './actions';
 
-export function GenerateInvoicesButton({ batchId }: { batchId: string }) {
+const TYPE_LABELS: Record<string, string> = {
+  DEPOSIT: 'DP',
+  FINAL_PAYMENT: 'Pelunasan',
+  READY_STOCK: 'Full payment',
+};
+
+export function GenerateInvoicesButton({ batchId, isPoType }: { batchId: string; isPoType: boolean }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [result, setResult] = useState<GenerateInvoicesResult | null>(null);
+  const [invoiceType, setInvoiceType] = useState<'DEPOSIT' | 'FINAL_PAYMENT' | 'READY_STOCK'>(
+    isPoType ? 'DEPOSIT' : 'READY_STOCK'
+  );
 
   function handleClick() {
     setResult(null);
     startTransition(async () => {
-      const res = await generateInvoicesForBatch(batchId);
+      const res = await generateInvoicesForBatch(batchId, invoiceType);
       setResult(res);
       router.refresh();
     });
@@ -21,9 +31,25 @@ export function GenerateInvoicesButton({ batchId }: { batchId: string }) {
 
   return (
     <div className="space-y-2">
-      <Button onClick={handleClick} disabled={isPending} className="w-full sm:w-auto">
-        {isPending ? 'Generating…' : 'Generate invoices for all orders in this batch'}
-      </Button>
+      <div className="flex flex-wrap gap-2">
+        <Select
+          value={invoiceType}
+          onChange={(e) => setInvoiceType(e.target.value as any)}
+          className="w-44"
+        >
+          {isPoType ? (
+            <>
+              <option value="DEPOSIT">DP</option>
+              <option value="FINAL_PAYMENT">Pelunasan</option>
+            </>
+          ) : (
+            <option value="READY_STOCK">Full payment</option>
+          )}
+        </Select>
+        <Button onClick={handleClick} disabled={isPending} className="flex-1 sm:flex-none">
+          {isPending ? 'Generating…' : `Generate invoice ${TYPE_LABELS[invoiceType]} buat semua order`}
+        </Button>
+      </div>
       {result && (
         <div className="text-sm">
           <p className="font-medium">

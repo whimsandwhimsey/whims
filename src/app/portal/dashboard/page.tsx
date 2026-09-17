@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Pencil, Wallet, HelpCircle, Truck } from 'lucide-react';
+import { Pencil, HelpCircle, Truck, Plus } from 'lucide-react';
 import { Logo } from '@/components/logo';
 import { prisma } from '@/lib/prisma';
 import { getAuthSession } from '@/lib/session';
@@ -12,12 +12,19 @@ import { SearchBox } from '@/components/search-box';
 import { UrlFilterSelect } from '@/components/url-filter-select';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { toNumber } from '@/lib/calculations';
+import { PayOngkirButton } from './pay-ongkir-button';
 
 const PAYMENT_STATUS_LABELS: Record<string, string> = {
   UNPAID: 'Unpaid',
   PARTIAL: 'Partial',
   PAID: 'Paid',
   OVERPAID: 'Overpaid',
+};
+
+const INVOICE_TYPE_LABELS: Record<string, string> = {
+  DEPOSIT: 'DP',
+  FINAL_PAYMENT: 'Pelunasan',
+  READY_STOCK: 'Ready Stock',
 };
 
 export default async function PortalDashboardPage({
@@ -28,7 +35,7 @@ export default async function PortalDashboardPage({
   const session = await getAuthSession();
   const customerId = session!.user.id;
 
-  const [customer, orders, depositBalance] = await Promise.all([
+  const [customer, orders, shipments, depositBalance] = await Promise.all([
     prisma.customer.findUnique({ where: { id: customerId } }),
     prisma.order.findMany({
       where: { customerId, status: { not: 'CANCELLED' } },
@@ -39,10 +46,16 @@ export default async function PortalDashboardPage({
         invoices: { orderBy: { issuedAt: 'asc' } },
       },
     }),
+    prisma.shipment.findMany({ where: { customerId } }),
     getCustomerDepositBalance(customerId),
   ]);
 
-  const outstandingTotal = orders.reduce((sum, o) => sum + toNumber(o.outstandingBalance), 0);
+  // Outstanding = unpaid books + unpaid ongkir, shown as one number up top
+  // with the two pieces broken out right below it — nothing hidden, no
+  // number the person has to go hunting for on a different page.
+  const outstandingBooks = orders.reduce((sum, o) => sum + toNumber(o.outstandingBalance), 0);
+  const outstandingOngkir = shipments.reduce((sum, s) => sum + toNumber(s.outstandingBalance), 0);
+  const outstandingTotal = outstandingBooks + outstandingOngkir;
 
   const q = searchParams.q?.trim().toLowerCase() ?? '';
   const batchFilter = searchParams.batch ?? '';
@@ -52,6 +65,10 @@ export default async function PortalDashboardPage({
   const batchOptions = Array.from(
     new Map(orders.filter((o) => o.poBatch).map((o) => [o.poBatch!.id, o.poBatch!.name])).entries()
   ).map(([value, label]) => ({ value, label }));
+
+  function firstUnpaidInvoice(o: (typeof orders)[number]) {
+    return o.invoices.find((inv) => inv.paymentStatus === 'UNPAID' || inv.paymentStatus === 'PARTIAL');
+  }
 
   const filteredOrders = orders
     .filter((o) => !batchFilter || o.poBatchId === batchFilter)
@@ -64,14 +81,13 @@ export default async function PortalDashboardPage({
         const bEta = b.expectedArrivalDate ? new Date(b.expectedArrivalDate).getTime() : Infinity;
         return aEta - bEta;
       }
+      // Default view: unpaid-invoice orders float to the top so nothing
+      // outstanding gets missed, then newest first within each group.
+      const aUnpaid = firstUnpaidInvoice(a) ? 1 : 0;
+      const bUnpaid = firstUnpaidInvoice(b) ? 1 : 0;
+      if (aUnpaid !== bUnpaid) return bUnpaid - aUnpaid;
       return new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime();
     });
-
-  const INVOICE_TYPE_LABELS: Record<string, string> = {
-    DEPOSIT: 'DP',
-    FINAL_PAYMENT: 'Pelunasan',
-    READY_STOCK: 'Ready Stock',
-  };
 
   return (
     <main className="min-h-screen bg-background">
@@ -101,23 +117,48 @@ export default async function PortalDashboardPage({
           </CardContent>
         </Card>
 
-        {/* 2. Outstanding + Deposit, side by side */}
+        {/* 2. Outstanding (total, then books/ongkir breakdown + pay-ongkir) and Deposit, side by side */}
         <div className="grid gap-4 sm:grid-cols-2">
           <Card>
-            <CardContent className="pt-6">
-              <p className="text-xs text-muted-foreground">Outstanding balance</p>
-              <p className="text-2xl font-semibold text-destructive">{formatCurrency(outstandingTotal)}</p>
+            <CardContent className="space-y-3 pt-6">
+              <div>
+                <p className="text-xs text-muted-foreground">Total outstanding</p>
+                <p className="text-2xl font-semibold text-destructive">{formatCurrency(outstandingTotal)}</p>
+              </div>
+              <div className="grid grid-cols-2 gap-2 border-t border-border pt-3 text-sm">
+                <div>
+                  <p className="text-xs text-muted-foreground">Buku</p>
+                  <p className="font-medium">{formatCurrency(outstandingBooks)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Ongkir</p>
+                  <p className="font-medium">{formatCurrency(outstandingOngkir)}</p>
+                </div>
+              </div>
+              {outstandingOngkir > 0 && (
+                <PayOngkirButton customerName={customer?.name ?? ''} outstanding={outstandingOngkir} />
+              )}
             </CardContent>
           </Card>
-          <Link href="/portal/deposits">
-            <Card className="transition-colors hover:border-primary/40">
-              <CardContent className="pt-6">
+
+          <Card>
+            <CardContent className="space-y-3 pt-6">
+              <div>
                 <p className="text-xs text-muted-foreground">Deposit balance</p>
                 <p className="text-2xl font-semibold">{formatCurrency(depositBalance)}</p>
-                <p className="mt-0.5 text-xs text-primary">View full history →</p>
-              </CardContent>
-            </Card>
-          </Link>
+              </div>
+              <div className="flex gap-2 border-t border-border pt-3">
+                <Button asChild size="sm" className="flex-1">
+                  <Link href="/portal/topup">
+                    <Plus className="h-4 w-4" /> Top up
+                  </Link>
+                </Button>
+                <Button asChild size="sm" variant="outline" className="flex-1">
+                  <Link href="/portal/deposits">Riwayat</Link>
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
         {/* 3. Order details — item level, filterable */}
@@ -143,7 +184,7 @@ export default async function PortalDashboardPage({
               <div className="w-44">
                 <UrlFilterSelect
                   paramKey="sort"
-                  allLabel="Terbaru"
+                  allLabel="Belum lunas dulu"
                   options={[
                     { value: 'amount_desc', label: 'Nominal terbesar' },
                     { value: 'eta_asc', label: 'ETA terdekat' },
@@ -156,69 +197,67 @@ export default async function PortalDashboardPage({
               <p className="py-6 text-center text-sm text-muted-foreground">No matching orders.</p>
             ) : (
               <div className="space-y-3">
-                {filteredOrders.map((o) => (
-                  <Link
-                    key={o.id}
-                    href={`/portal/orders/${o.id}`}
-                    className="block rounded-md border border-border p-3 hover:border-primary/40"
-                  >
-                    <div className="mb-1.5 flex flex-wrap items-start justify-between gap-2">
-                      <div>
-                        <p className="text-sm font-medium">{o.poBatch?.name ?? o.orderNumber}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {o.poBatch ? o.orderNumber : 'No batch'}
-                          {o.expectedArrivalDate ? ` · ETA ${formatDate(o.expectedArrivalDate)}` : ''}
-                        </p>
-                      </div>
-                      <p className="text-sm font-medium">{formatCurrency(toNumber(o.totalAmount))}</p>
-                    </div>
-                    <ul className="mb-2 list-inside list-disc text-xs text-foreground">
-                      {o.items.map((it) => (
-                        <li key={it.id}>
-                          {it.bookTitle}
-                          {it.quantity > 1 ? ` ×${it.quantity}` : ''}
-                        </li>
-                      ))}
-                    </ul>
-                    <div className="flex flex-wrap gap-1.5">
-                      {o.invoices.length === 0 ? (
-                        <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-                          Belum ada invoice
-                        </span>
-                      ) : (
-                        o.invoices.map((inv) => (
-                          <span
-                            key={inv.id}
-                            className="inline-flex items-center gap-1 rounded-full bg-secondary px-2 py-0.5 text-[10px] font-medium text-secondary-foreground"
-                          >
-                            {INVOICE_TYPE_LABELS[inv.type] ?? inv.type}
-                            <PaymentStatusBadge status={inv.paymentStatus} />
-                          </span>
-                        ))
+                {filteredOrders.map((o) => {
+                  const unpaidInvoice = firstUnpaidInvoice(o);
+                  return (
+                    <div
+                      key={o.id}
+                      className={`rounded-md border p-3 ${
+                        unpaidInvoice ? 'border-destructive/40' : 'border-border'
+                      }`}
+                    >
+                      <Link href={`/portal/orders/${o.id}`} className="block hover:opacity-80">
+                        <div className="mb-1.5 flex flex-wrap items-start justify-between gap-2">
+                          <div>
+                            <p className="text-sm font-medium">{o.poBatch?.name ?? o.orderNumber}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {o.poBatch ? o.orderNumber : 'No batch'}
+                              {o.expectedArrivalDate ? ` · ETA ${formatDate(o.expectedArrivalDate)}` : ''}
+                            </p>
+                          </div>
+                          <p className="text-sm font-medium">{formatCurrency(toNumber(o.totalAmount))}</p>
+                        </div>
+                        <ul className="mb-2 list-inside list-disc text-xs text-foreground">
+                          {o.items.map((it) => (
+                            <li key={it.id}>
+                              {it.bookTitle}
+                              {it.quantity > 1 ? ` ×${it.quantity}` : ''}
+                            </li>
+                          ))}
+                        </ul>
+                        <div className="flex flex-wrap gap-1.5">
+                          {o.invoices.length === 0 ? (
+                            <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                              Belum ada invoice
+                            </span>
+                          ) : (
+                            o.invoices.map((inv) => (
+                              <span
+                                key={inv.id}
+                                className="inline-flex items-center gap-1 rounded-full bg-secondary px-2 py-0.5 text-[10px] font-medium text-secondary-foreground"
+                              >
+                                {INVOICE_TYPE_LABELS[inv.type] ?? inv.type}
+                                <PaymentStatusBadge status={inv.paymentStatus} />
+                              </span>
+                            ))
+                          )}
+                        </div>
+                      </Link>
+                      {unpaidInvoice && (
+                        <Button asChild size="sm" className="mt-2 w-full">
+                          <Link href={`/portal/invoices/${unpaidInvoice.id}#bayar`}>Bayar sekarang</Link>
+                        </Button>
                       )}
                     </div>
-                  </Link>
-                ))}
+                  );
+                })}
               </div>
             )}
           </CardContent>
         </Card>
 
-        {/* 4-6. Top up, Pengiriman, FAQ */}
-        <div className="grid gap-3 sm:grid-cols-3">
-          <Link href="/portal/topup">
-            <Card className="transition-colors hover:border-primary/40">
-              <CardContent className="flex items-center gap-3 pt-6">
-                <div className="rounded-md bg-secondary p-2.5">
-                  <Wallet className="h-5 w-5 text-primary" />
-                </div>
-                <div>
-                  <p className="font-medium">Top up deposit</p>
-                  <p className="text-xs text-muted-foreground">Scan QRIS &amp; notify admin via WhatsApp</p>
-                </div>
-              </CardContent>
-            </Card>
-          </Link>
+        {/* 4-5. Pengiriman, FAQ */}
+        <div className="grid gap-3 sm:grid-cols-2">
           <Link href="/portal/shipments">
             <Card className="transition-colors hover:border-primary/40">
               <CardContent className="flex items-center gap-3 pt-6">

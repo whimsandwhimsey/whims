@@ -77,46 +77,79 @@ export default async function PortalOrderDetailPage({ params }: { params: { id: 
             <CardHeader>
               <CardTitle>Items</CardTitle>
             </CardHeader>
-            <CardContent className="overflow-x-auto p-0">
-              <table className="w-full min-w-[520px] text-sm">
-                <thead className="bg-secondary text-left text-xs uppercase tracking-wide text-muted-foreground">
-                  <tr>
-                    <th className="px-4 py-2 font-medium">Title</th>
-                    <th className="px-4 py-2 font-medium text-right">Qty</th>
-                    <th className="px-4 py-2 font-medium text-right">Price</th>
-                    <th className="px-4 py-2 font-medium text-right">Subtotal</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {order.items.map((item) => (
-                    <tr key={item.id}>
-                      <td className="px-4 py-2">
-                        <div className="flex items-center gap-2">
-                          {item.book?.imageUrl ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img src={item.book.imageUrl} alt="" className="h-12 w-8 shrink-0 rounded object-cover" />
-                          ) : (
-                            <div className="h-12 w-8 shrink-0 rounded bg-secondary" />
-                          )}
-                          <div>
-                            <p>{item.bookTitle}</p>
-                            {(item.isbn || item.format) && (
-                              <p className="text-xs text-muted-foreground">
-                                {[item.format ? bookFormatLabels[item.format] ?? item.format : null, item.isbn].filter(Boolean).join(' · ')}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-4 py-2 text-right">{item.quantity}</td>
-                      <td className="px-4 py-2 text-right">{formatCurrency(item.sellingPrice.toString())}</td>
-                      <td className="px-4 py-2 text-right font-medium">
-                        {formatCurrency(item.subtotal.toString())}
-                      </td>
+            <CardContent className="p-0">
+              {/* Mobile: compact cards, no horizontal scroll */}
+              <div className="divide-y divide-border sm:hidden">
+                {order.items.map((item) => (
+                  <div key={item.id} className="flex gap-3 p-4">
+                    {item.book?.imageUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={item.book.imageUrl} alt="" className="h-14 w-10 shrink-0 rounded object-cover" />
+                    ) : (
+                      <div className="h-14 w-10 shrink-0 rounded bg-secondary" />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium">{item.bookTitle}</p>
+                      {(item.isbn || item.format) && (
+                        <p className="mb-1.5 text-xs text-muted-foreground">
+                          {[item.format ? bookFormatLabels[item.format] ?? item.format : null, item.isbn]
+                            .filter(Boolean)
+                            .join(' · ')}
+                        </p>
+                      )}
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">
+                          {item.quantity} × {formatCurrency(item.sellingPrice.toString())}
+                        </span>
+                        <span className="font-medium">{formatCurrency(item.subtotal.toString())}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Desktop: full table */}
+              <div className="hidden overflow-x-auto sm:block">
+                <table className="w-full min-w-[520px] text-sm">
+                  <thead className="bg-secondary text-left text-xs uppercase tracking-wide text-muted-foreground">
+                    <tr>
+                      <th className="px-4 py-2 font-medium">Title</th>
+                      <th className="px-4 py-2 font-medium text-right">Qty</th>
+                      <th className="px-4 py-2 font-medium text-right">Price</th>
+                      <th className="px-4 py-2 font-medium text-right">Subtotal</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {order.items.map((item) => (
+                      <tr key={item.id}>
+                        <td className="px-4 py-2">
+                          <div className="flex items-center gap-2">
+                            {item.book?.imageUrl ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={item.book.imageUrl} alt="" className="h-12 w-8 shrink-0 rounded object-cover" />
+                            ) : (
+                              <div className="h-12 w-8 shrink-0 rounded bg-secondary" />
+                            )}
+                            <div>
+                              <p>{item.bookTitle}</p>
+                              {(item.isbn || item.format) && (
+                                <p className="text-xs text-muted-foreground">
+                                  {[item.format ? bookFormatLabels[item.format] ?? item.format : null, item.isbn].filter(Boolean).join(' · ')}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-2 text-right">{item.quantity}</td>
+                        <td className="px-4 py-2 text-right">{formatCurrency(item.sellingPrice.toString())}</td>
+                        <td className="px-4 py-2 text-right font-medium">
+                          {formatCurrency(item.subtotal.toString())}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </CardContent>
           </Card>
 

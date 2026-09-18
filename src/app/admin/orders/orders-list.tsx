@@ -150,6 +150,17 @@ export function OrdersList({
       )}
 
       <div className="divide-y divide-border md:hidden">
+        {orders.length > 0 && (
+          <button
+            type="button"
+            onClick={() =>
+              setSelected(selected.size === orders.length ? new Set() : new Set(orders.map((o) => o.id)))
+            }
+            className="w-full px-4 py-2 text-left text-xs text-primary underline underline-offset-2"
+          >
+            {selected.size === orders.length ? 'Batal pilih semua' : `Pilih semua (${orders.length})`}
+          </button>
+        )}
         {orders.map((o) => {
           const inv = invoiceStatusOf(o);
           return (
@@ -208,7 +219,19 @@ export function OrdersList({
         <table className="w-full text-sm">
           <thead className="bg-secondary text-left text-xs uppercase tracking-wide text-muted-foreground">
             <tr>
-              <th className="w-8 px-4 py-3"></th>
+              <th className="w-8 px-4 py-3">
+                <input
+                  type="checkbox"
+                  checked={orders.length > 0 && selected.size === orders.length}
+                  ref={(el) => {
+                    if (el) el.indeterminate = selected.size > 0 && selected.size < orders.length;
+                  }}
+                  onChange={() =>
+                    setSelected(selected.size === orders.length ? new Set() : new Set(orders.map((o) => o.id)))
+                  }
+                  className="h-4 w-4 rounded border-input"
+                />
+              </th>
               <th className="px-4 py-3 font-medium">Order #</th>
               <th className="px-4 py-3 font-medium">Customer</th>
               <th className="px-4 py-3 font-medium">Books</th>

@@ -7,7 +7,10 @@ import { PoBatchForm } from '../../po-batch-form';
 import { updatePoBatch } from '../../actions';
 
 export default async function EditPoBatchPage({ params }: { params: { id: string } }) {
-  const batch = await prisma.purchaseBatch.findUnique({ where: { id: params.id } });
+  const [batch, suppliers] = await Promise.all([
+    prisma.purchaseBatch.findUnique({ where: { id: params.id } }),
+    prisma.supplier.findMany({ where: { isActive: true }, orderBy: { name: 'asc' }, select: { id: true, name: true } }),
+  ]);
   if (!batch) notFound();
 
   const boundAction = updatePoBatch.bind(null, batch.id);
@@ -26,7 +29,7 @@ export default async function EditPoBatchPage({ params }: { params: { id: string
           <CardTitle>Edit PO batch</CardTitle>
         </CardHeader>
         <CardContent>
-          <PoBatchForm action={boundAction} batch={batch} />
+          <PoBatchForm action={boundAction} batch={batch} suppliers={suppliers} />
         </CardContent>
       </Card>
     </div>

@@ -18,6 +18,7 @@ const batchSchema = z.object({
   notes: z.string().max(1000).optional().or(z.literal('')),
   dpType: z.enum(['PERCENTAGE', 'FIXED_PER_BOOK', 'FIXED_TOTAL']).optional().or(z.literal('')),
   dpValue: z.coerce.number().min(0).optional().or(z.literal('')),
+  supplierId: z.string().optional().or(z.literal('')),
 });
 
 export type FormState = { errors?: Record<string, string[]> } | null;
@@ -31,6 +32,7 @@ function parseBatchForm(formData: FormData) {
     notes: formData.get('notes') ?? '',
     dpType: formData.get('dpType') ?? '',
     dpValue: formData.get('dpValue') ?? '',
+    supplierId: formData.get('supplierId') ?? '',
   });
 }
 
@@ -49,6 +51,7 @@ export async function createPoBatch(_prevState: FormState, formData: FormData): 
       notes: parsed.data.notes || null,
       dpType: isPoType && parsed.data.dpType ? (parsed.data.dpType as any) : null,
       dpValue: isPoType && parsed.data.dpValue !== '' && parsed.data.dpValue !== undefined ? parsed.data.dpValue : null,
+      supplierId: parsed.data.supplierId || null,
     },
   });
 
@@ -81,6 +84,7 @@ export async function updatePoBatch(id: string, _prevState: FormState, formData:
       notes: parsed.data.notes || null,
       dpType: isPoType && parsed.data.dpType ? (parsed.data.dpType as any) : null,
       dpValue: isPoType && parsed.data.dpValue !== '' && parsed.data.dpValue !== undefined ? parsed.data.dpValue : null,
+      supplierId: parsed.data.supplierId || null,
     },
   });
 

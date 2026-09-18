@@ -18,7 +18,10 @@ type Batch = {
   notes: string | null;
   dpType: string | null;
   dpValue: unknown;
+  supplierId: string | null;
 };
+
+type Supplier = { id: string; name: string };
 
 function toDateInputValue(d: Date | null | undefined): string {
   if (!d) return '';
@@ -28,9 +31,11 @@ function toDateInputValue(d: Date | null | undefined): string {
 export function PoBatchForm({
   action,
   batch,
+  suppliers,
 }: {
   action: (prevState: FormState, formData: FormData) => Promise<FormState>;
   batch?: Batch;
+  suppliers: Supplier[];
 }) {
   const [state, formAction] = useFormState(action, null);
   const [type, setType] = useState(batch?.type ?? 'PO_REGULAR');
@@ -41,9 +46,31 @@ export function PoBatchForm({
   return (
     <form action={formAction} className="space-y-5">
       <div className="space-y-1.5">
-        <Label htmlFor="name">Batch name</Label>
-        <Input id="name" name="name" defaultValue={batch?.name} placeholder="e.g. Fast PO — July Batch 2" required />
+        <Label htmlFor="name">Nama PO</Label>
+        <Input
+          id="name"
+          name="name"
+          defaultValue={batch?.name}
+          placeholder="e.g. PO UK — Usborne, DK Books"
+          required
+        />
+        <p className="text-xs text-muted-foreground">
+          Ini yang keliatan sama customer di portal mereka — bebas kasih nama apa aja (negara, publisher,
+          dll). Supplier di bawah cuma buat internal, gak ditampilin ke customer.
+        </p>
         <FieldError errors={state?.errors?.name} />
+      </div>
+
+      <div className="space-y-1.5">
+        <Label htmlFor="supplierId">Supplier (internal aja)</Label>
+        <Select id="supplierId" name="supplierId" defaultValue={batch?.supplierId ?? ''}>
+          <option value="">— Belum ada —</option>
+          {suppliers.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.name}
+            </option>
+          ))}
+        </Select>
       </div>
 
       <div className="space-y-1.5">

@@ -58,9 +58,17 @@ export default async function OrdersPage({
   const publisherIds = (searchParams.publisher ?? '').split(',').filter(Boolean);
   const sort = ['oldest', 'name_asc', 'name_desc'].includes(searchParams.sort ?? '') ? searchParams.sort! : 'newest';
   const page = Math.max(1, parseInt(searchParams.page ?? '1', 10) || 1);
+  const viewAll = searchParams.viewAll === '1';
 
   const where: Record<string, unknown> = {};
-  if (statuses.length > 0) where.status = { in: statuses };
+  if (statuses.length > 0) {
+    where.status = { in: statuses };
+  } else if (!q) {
+    // Completed orders clutter the default view — hidden unless someone
+    // explicitly filters for them or is searching (search should never
+    // miss something just because it's done).
+    where.status = { not: 'COMPLETED' };
+  }
   if (paymentStatuses.length > 0) where.paymentStatus = { in: paymentStatuses };
   if (batchIds.length > 0) where.poBatchId = { in: batchIds };
   if (orderTypes.length > 0) where.orderType = { in: orderTypes };
@@ -89,8 +97,8 @@ export default async function OrdersPage({
           : sort === 'name_desc'
             ? { customer: { name: 'desc' } }
             : { orderDate: sort === 'oldest' ? 'asc' : 'desc' },
-      skip: (page - 1) * PAGE_SIZE,
-      take: PAGE_SIZE,
+      skip: viewAll ? undefined : (page - 1) * PAGE_SIZE,
+      take: viewAll ? undefined : PAGE_SIZE,
       include: {
         customer: true,
         poBatch: { select: { id: true, name: true } },
@@ -222,7 +230,25 @@ export default async function OrdersPage({
 
       <Card className="overflow-hidden">
         <OrdersList orders={orders as any} poBatches={poBatches} />
-        <Pagination page={page} totalPages={totalPages} buildHref={buildHref} />
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border p-3">
+          {viewAll ? (
+            <Link href={buildHref(1)} className="text-sm text-primary underline underline-offset-2">
+              Kembali ke tampilan per-halaman
+            </Link>
+          ) : (
+            <Link
+              href={(() => {
+                const p = new URLSearchParams(exportParams);
+                p.set('viewAll', '1');
+                return `/admin/orders?${p.toString()}`;
+              })()}
+              className="text-sm text-primary underline underline-offset-2"
+            >
+              Tampilkan semua ({total})
+            </Link>
+          )}
+          {!viewAll && <Pagination page={page} totalPages={totalPages} buildHref={buildHref} />}
+        </div>
       </Card>
     </div>
   );

@@ -7,6 +7,7 @@ import { formatDate } from '@/lib/utils';
 import { MultiSelectFilter } from '@/components/multi-select-filter';
 import { SortSelect } from '@/components/sort-select';
 import { SearchBox } from '@/components/search-box';
+import { BatchOpenToggle } from './batch-open-toggle';
 
 const TYPE_LABELS: Record<string, string> = {
   PO_REGULAR: 'PO Reguler',
@@ -161,13 +162,7 @@ export default async function PoBatchesPage({
               <div className="flex items-center justify-between gap-2">
                 <p className="font-medium">
                   {b.name}
-                  <span
-                    className={`ml-2 inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium align-middle ${
-                      b.isOpen ? 'bg-success/15 text-success' : 'bg-muted text-muted-foreground'
-                    }`}
-                  >
-                    {b.isOpen ? 'Open' : 'Closed'}
-                  </span>
+                  <BatchOpenToggle batchId={b.id} isOpen={b.isOpen} />
                 </p>
                 <p className="text-sm text-muted-foreground">{b._count.orders} order(s)</p>
               </div>

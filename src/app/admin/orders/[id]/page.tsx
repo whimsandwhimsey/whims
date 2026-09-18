@@ -127,54 +127,104 @@ export default async function OrderDetailPage({
             <CardHeader>
               <CardTitle>Book items</CardTitle>
             </CardHeader>
-            <CardContent className="overflow-x-auto p-0">
-              <table className="w-full min-w-[640px] text-sm">
-                <thead className="bg-secondary text-left text-xs uppercase tracking-wide text-muted-foreground">
-                  <tr>
-                    <th className="px-4 py-2 font-medium">Title</th>
-                    <th className="px-4 py-2 font-medium text-right">Qty</th>
-                    <th className="px-4 py-2 font-medium text-right">Price</th>
-                    <th className="px-4 py-2 font-medium text-right">Discount</th>
-                    <th className="px-4 py-2 font-medium text-right">Subtotal</th>
-                    <th className="px-4 py-2 font-medium">OOS</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {order.items.map((item) => (
-                    <tr key={item.id} className={item.isOos ? 'bg-amber-50/50' : ''}>
-                      <td className="px-4 py-2">
-                        <p>
-                          {item.bookTitle}
-                          {item.isOos && (
-                            <span className="ml-1.5 inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800">
-                              OOS
-                            </span>
-                          )}
-                        </p>
-                        {(item.isbn || item.format) && (
-                          <p className="text-xs text-muted-foreground">
-                            {[item.format ? bookFormatLabels[item.format] ?? item.format : null, item.isbn].filter(Boolean).join(' · ')}
-                          </p>
-                        )}
-                      </td>
-                      <td className="px-4 py-2 text-right">{item.quantity}</td>
-                      <td className="px-4 py-2 text-right">{formatCurrency(item.sellingPrice.toString())}</td>
-                      <td className="px-4 py-2 text-right">{formatCurrency(item.discount.toString())}</td>
-                      <td className="px-4 py-2 text-right font-medium">
-                        {formatCurrency(item.subtotal.toString())}
-                      </td>
-                      <td className="px-4 py-2">
-                        <OosItemActions
-                          itemId={item.id}
-                          isOos={item.isOos}
-                          isResolved={!!item.oosResolution}
-                          resolution={item.oosResolution}
-                        />
-                      </td>
+            <CardContent className="p-0">
+              {/* Mobile: compact stacked cards, no horizontal scroll */}
+              <div className="divide-y divide-border md:hidden">
+                {order.items.map((item) => (
+                  <div key={item.id} className={`p-4 ${item.isOos ? 'bg-amber-50/50' : ''}`}>
+                    <p className="mb-0.5 font-medium">
+                      {item.bookTitle}
+                      {item.isOos && (
+                        <span className="ml-1.5 inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800">
+                          OOS
+                        </span>
+                      )}
+                    </p>
+                    {(item.isbn || item.format) && (
+                      <p className="mb-2 text-xs text-muted-foreground">
+                        {[item.format ? bookFormatLabels[item.format] ?? item.format : null, item.isbn]
+                          .filter(Boolean)
+                          .join(' · ')}
+                      </p>
+                    )}
+                    <div className="mb-2 grid grid-cols-2 gap-x-3 gap-y-1 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Qty</span>
+                        <span>{item.quantity}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Price</span>
+                        <span>{formatCurrency(item.sellingPrice.toString())}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Discount</span>
+                        <span>{formatCurrency(item.discount.toString())}</span>
+                      </div>
+                      <div className="flex justify-between font-medium">
+                        <span className="text-muted-foreground font-normal">Subtotal</span>
+                        <span>{formatCurrency(item.subtotal.toString())}</span>
+                      </div>
+                    </div>
+                    <OosItemActions
+                      itemId={item.id}
+                      isOos={item.isOos}
+                      isResolved={!!item.oosResolution}
+                      resolution={item.oosResolution}
+                    />
+                  </div>
+                ))}
+              </div>
+
+              {/* Desktop: full table */}
+              <div className="hidden overflow-x-auto md:block">
+                <table className="w-full min-w-[640px] text-sm">
+                  <thead className="bg-secondary text-left text-xs uppercase tracking-wide text-muted-foreground">
+                    <tr>
+                      <th className="px-4 py-2 font-medium">Title</th>
+                      <th className="px-4 py-2 font-medium text-right">Qty</th>
+                      <th className="px-4 py-2 font-medium text-right">Price</th>
+                      <th className="px-4 py-2 font-medium text-right">Discount</th>
+                      <th className="px-4 py-2 font-medium text-right">Subtotal</th>
+                      <th className="px-4 py-2 font-medium">OOS</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {order.items.map((item) => (
+                      <tr key={item.id} className={item.isOos ? 'bg-amber-50/50' : ''}>
+                        <td className="px-4 py-2">
+                          <p>
+                            {item.bookTitle}
+                            {item.isOos && (
+                              <span className="ml-1.5 inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800">
+                                OOS
+                              </span>
+                            )}
+                          </p>
+                          {(item.isbn || item.format) && (
+                            <p className="text-xs text-muted-foreground">
+                              {[item.format ? bookFormatLabels[item.format] ?? item.format : null, item.isbn].filter(Boolean).join(' · ')}
+                            </p>
+                          )}
+                        </td>
+                        <td className="px-4 py-2 text-right">{item.quantity}</td>
+                        <td className="px-4 py-2 text-right">{formatCurrency(item.sellingPrice.toString())}</td>
+                        <td className="px-4 py-2 text-right">{formatCurrency(item.discount.toString())}</td>
+                        <td className="px-4 py-2 text-right font-medium">
+                          {formatCurrency(item.subtotal.toString())}
+                        </td>
+                        <td className="px-4 py-2">
+                          <OosItemActions
+                            itemId={item.id}
+                            isOos={item.isOos}
+                            isResolved={!!item.oosResolution}
+                            resolution={item.oosResolution}
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </CardContent>
           </Card>
 

@@ -45,6 +45,7 @@ export default async function PoBatchDetailPage({
   const batch = await prisma.purchaseBatch.findUnique({
     where: { id: params.id },
     include: {
+      supplier: { select: { name: true } },
       orders: {
         include: { customer: true, items: true },
         orderBy: { orderDate: 'desc' },
@@ -136,7 +137,9 @@ export default async function PoBatchDetailPage({
           </span>
         </h1>
         <p className="text-sm text-muted-foreground">
-          {TYPE_LABELS[batch.type]} · Opened {formatDate(batch.batchDate)}
+          {TYPE_LABELS[batch.type]}
+          {batch.supplier ? ` · Supplier: ${batch.supplier.name}` : ' · No supplier set'} · Opened{' '}
+          {formatDate(batch.batchDate)}
           {batch.expectedArrivalDate ? ` · Expected ${formatDate(batch.expectedArrivalDate)}` : ''}
         </p>
         <p className="mt-1 text-sm text-brass">Invoice rule: {TYPE_RULE[batch.type]}</p>

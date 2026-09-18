@@ -47,8 +47,9 @@ export async function findOrCreatePurchaseBatch(
     return existing;
   }
 
-  const supplier = key.supplierId ? await tx.supplier.findUnique({ where: { id: key.supplierId } }) : null;
-  const fallbackName = [supplier?.name, key.poMonth].filter(Boolean).join(' — ') || `PO ${key.poMonth}`;
+  // Never embed the supplier name here — "name" is what customers see in
+  // their portal, and supplier is meant to stay internal-only.
+  const fallbackName = `PO ${key.poMonth}`;
 
   return tx.purchaseBatch.create({
     data: {

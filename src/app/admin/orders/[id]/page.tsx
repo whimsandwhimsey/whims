@@ -14,6 +14,7 @@ import { deleteOrder } from '../actions';
 import { InvoicePaymentActions } from './invoice-payment-actions';
 import { CreateInvoiceForm } from './create-invoice-form';
 import { OosItemActions } from './oos-item-actions';
+import { DuplicateOrderButton } from './duplicate-order-button';
 import { bookFormatLabels } from '@/lib/validations';
 
 const INVOICE_TYPE_LABELS: Record<string, string> = {
@@ -56,6 +57,11 @@ export default async function OrderDetailPage({
   });
   if (!order) notFound();
 
+  const allCustomers = await prisma.customer.findMany({
+    orderBy: { name: 'asc' },
+    select: { id: true, name: true, phone: true },
+  });
+
   const totalQuantity = order.items.reduce((sum, item) => sum + item.quantity, 0);
 
   const depositBalance = await getCustomerDepositBalance(order.customerId);
@@ -77,12 +83,13 @@ export default async function OrderDetailPage({
         >
           <ArrowLeft className="h-4 w-4" /> Back to orders
         </Link>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button variant="outline" size="sm" asChild>
             <Link href={`/admin/orders/${order.id}/edit`}>
               <Pencil className="h-4 w-4" /> Edit
             </Link>
           </Button>
+          <DuplicateOrderButton orderId={order.id} customers={allCustomers} />
           <DeleteButton
             action={deleteOrder.bind(null, order.id)}
             confirmMessage={`Delete order ${order.orderNumber}? If it has payments/invoices on record, it'll be cancelled instead (kept for your records) — otherwise it's removed permanently.`}

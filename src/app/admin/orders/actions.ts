@@ -564,6 +564,91 @@ export async function updateBatchOrdersStatus(poBatchId: string, status: string,
  * CANCELLED), which removes it from every active view (dashboard, packing
  * list, pre-orders) while keeping the full trail intact.
  */
+export type DuplicateOrderResult =
+  | { success: true; createdCount: number; orderIds: string[] }
+  | { success: false; error: string };
+
+/**
+ * Duplicates an order's items and settings (order type, PO batch, DP rule,
+ * dates, notes) for one or more OTHER customers — built for "30 people
+ * pre-ordered the same book" so the details only get typed once. Each
+ * target customer gets their own brand-new order; nothing is merged into
+ * an existing order even if one would otherwise match, since the whole
+ * point here is deliberately creating distinct new orders.
+ */
+export async function duplicateOrder(sourceOrderId: string, customerIds: string[]): Promise<DuplicateOrderResult> {
+  const session = await requireStaffSession();
+
+  if (customerIds.length === 0) return { success: false, error: 'Pilih minimal 1 customer.' };
+
+  const source = await prisma.order.findUnique({
+    where: { id: sourceOrderId },
+    include: { items: true },
+  });
+  if (!source) return { success: false, error: 'Order asal tidak ditemukan.' };
+
+  const totalAmount = source.items.reduce((sum, it) => sum + toNumber(it.subtotal), 0);
+  const paymentStatus = computePaymentStatus(totalAmount, 0);
+
+  try {
+    const orderIds: string[] = [];
+
+    for (const customerId of customerIds) {
+      const orderNumber = await generateOrderNumberWithRetry();
+      const created = await prisma.order.create({
+        data: {
+          orderNumber,
+          customerId,
+          orderType: source.orderType,
+          poMonth: source.poMonth,
+          etaMonth: source.etaMonth,
+          eventName: source.eventName,
+          dpType: source.dpType,
+          dpValue: source.dpValue,
+          supplierId: source.supplierId,
+          poBatchId: source.poBatchId,
+          orderDate: new Date(),
+          expectedArrivalDate: source.expectedArrivalDate,
+          status: source.status,
+          paymentStatus,
+          totalAmount,
+          amountPaid: 0,
+          outstandingBalance: totalAmount,
+          notes: source.notes,
+          items: {
+            create: source.items.map((it) => ({
+              bookId: it.bookId,
+              bookTitle: it.bookTitle,
+              isbn: it.isbn,
+              format: it.format,
+              quantity: it.quantity,
+              sellingPrice: it.sellingPrice,
+              discount: it.discount,
+              subtotal: it.subtotal,
+            })),
+          },
+        },
+      });
+      orderIds.push(created.id);
+    }
+
+    await writeAuditLog({
+      userId: session.user.id,
+      action: 'CREATE',
+      entityType: 'Order',
+      summary: `Duplicated order ${source.orderNumber} into ${orderIds.length} new order(s)`,
+    });
+
+    revalidatePath('/admin/orders');
+    if (source.poBatchId) revalidatePath(`/admin/po-batches/${source.poBatchId}`);
+
+    return { success: true, createdCount: orderIds.length, orderIds };
+  } catch (err) {
+    console.error(err);
+    return { success: false, error: 'Gagal duplicate order. Coba lagi.' };
+  }
+}
+
 export async function deleteOrder(id: string) {
   const session = await requireStaffSession();
 

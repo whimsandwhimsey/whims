@@ -45,6 +45,7 @@ export default async function OrdersPage({
     eta?: string;
     publisher?: string;
     sort?: string;
+    viewAll?: string;
   };
 }) {
   const q = searchParams.q?.trim() ?? '';

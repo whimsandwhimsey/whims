@@ -7,7 +7,15 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { requestAddressChange } from '../../actions';
 
-export function EditAddressForm({ defaultValue }: { defaultValue: string }) {
+export function EditAddressForm({
+  defaultValue,
+  isFirstTime,
+  callbackUrl,
+}: {
+  defaultValue: string;
+  isFirstTime: boolean;
+  callbackUrl?: string;
+}) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -21,6 +29,10 @@ export function EditAddressForm({ defaultValue }: { defaultValue: string }) {
         setError(result.error);
         return;
       }
+      if (isFirstTime) {
+        router.push(callbackUrl || '/portal/dashboard');
+        return;
+      }
       setSubmitted(true);
       router.refresh();
     });
@@ -29,7 +41,7 @@ export function EditAddressForm({ defaultValue }: { defaultValue: string }) {
   return (
     <form action={handleSubmit} className="space-y-3">
       <div className="space-y-1.5">
-        <Label htmlFor="newAddress">New address</Label>
+        <Label htmlFor="newAddress">{isFirstTime ? 'Your address' : 'New address'}</Label>
         <Textarea id="newAddress" name="newAddress" rows={3} defaultValue={defaultValue} required />
       </div>
       {error && <p className="text-sm text-destructive">{error}</p>}
@@ -37,7 +49,7 @@ export function EditAddressForm({ defaultValue }: { defaultValue: string }) {
         <p className="text-sm text-success">Submitted! Waiting for the store to confirm it.</p>
       )}
       <Button type="submit" className="w-full" disabled={isPending}>
-        {isPending ? 'Submitting…' : 'Submit for confirmation'}
+        {isPending ? 'Saving…' : isFirstTime ? 'Save & continue' : 'Submit for confirmation'}
       </Button>
     </form>
   );

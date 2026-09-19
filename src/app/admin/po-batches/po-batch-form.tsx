@@ -131,8 +131,8 @@ export function PoBatchForm({
           <Input
             id="expectedArrivalDate"
             name="expectedArrivalDate"
-            type="date"
-            defaultValue={toDateInputValue(batch?.expectedArrivalDate)}
+            type="month"
+            defaultValue={batch?.expectedArrivalDate ? new Date(batch.expectedArrivalDate).toISOString().slice(0, 7) : ''}
           />
         </div>
       </div>

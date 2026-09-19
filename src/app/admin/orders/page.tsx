@@ -8,10 +8,10 @@ import { SearchBox } from '@/components/search-box';
 import { Pagination } from '@/components/pagination';
 import { MultiSelectFilter } from '@/components/multi-select-filter';
 import { SortSelect } from '@/components/sort-select';
+import { PageSizeSelect } from '@/components/page-size-select';
 import { orderStatusValues, orderTypeValues, orderTypeLabels } from '@/lib/validations';
 import { OrdersList } from './orders-list';
 
-const PAGE_SIZE = 15;
 
 const STATUS_LABELS: Record<string, string> = {
   WAITING: 'Open',
@@ -46,6 +46,8 @@ export default async function OrdersPage({
     publisher?: string;
     sort?: string;
     viewAll?: string;
+    tab?: string;
+    pageSize?: string;
   };
 }) {
   const q = searchParams.q?.trim() ?? '';
@@ -60,14 +62,17 @@ export default async function OrdersPage({
   const sort = ['oldest', 'name_asc', 'name_desc'].includes(searchParams.sort ?? '') ? searchParams.sort! : 'newest';
   const page = Math.max(1, parseInt(searchParams.page ?? '1', 10) || 1);
   const viewAll = searchParams.viewAll === '1';
+  const tab = searchParams.tab === 'past' ? 'past' : 'active';
+  const pageSize = ['25', '50', '100', '200'].includes(searchParams.pageSize ?? '')
+    ? parseInt(searchParams.pageSize!, 10)
+    : 25;
 
   const where: Record<string, unknown> = {};
   if (statuses.length > 0) {
     where.status = { in: statuses };
-  } else if (!q) {
-    // Completed orders clutter the default view — hidden unless someone
-    // explicitly filters for them or is searching (search should never
-    // miss something just because it's done).
+  } else if (tab === 'past') {
+    where.status = 'COMPLETED';
+  } else {
     where.status = { not: 'COMPLETED' };
   }
   if (paymentStatuses.length > 0) where.paymentStatus = { in: paymentStatuses };
@@ -98,8 +103,8 @@ export default async function OrdersPage({
           : sort === 'name_desc'
             ? { customer: { name: 'desc' } }
             : { orderDate: sort === 'oldest' ? 'asc' : 'desc' },
-      skip: viewAll ? undefined : (page - 1) * PAGE_SIZE,
-      take: viewAll ? undefined : PAGE_SIZE,
+      skip: viewAll ? undefined : (page - 1) * pageSize,
+      take: viewAll ? undefined : pageSize,
       include: {
         customer: true,
         poBatch: { select: { id: true, name: true } },
@@ -128,7 +133,7 @@ export default async function OrdersPage({
 
 
 
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   function buildHref(p: number) {
     const params = new URLSearchParams();
@@ -142,6 +147,8 @@ export default async function OrdersPage({
     if (etaMonths.length) params.set('eta', etaMonths.join(','));
     if (publisherIds.length) params.set('publisher', publisherIds.join(','));
     if (sort !== 'newest') params.set('sort', sort);
+    if (tab !== 'active') params.set('tab', tab);
+    if (searchParams.pageSize) params.set('pageSize', searchParams.pageSize);
     params.set('page', String(p));
     return `/admin/orders?${params.toString()}`;
   }
@@ -156,6 +163,7 @@ export default async function OrdersPage({
   if (poMonths.length) exportParams.set('poMonth', poMonths.join(','));
   if (etaMonths.length) exportParams.set('eta', etaMonths.join(','));
   if (publisherIds.length) exportParams.set('publisher', publisherIds.join(','));
+  if (tab !== 'active') exportParams.set('tab', tab);
 
   return (
     <div className="p-6">
@@ -172,6 +180,35 @@ export default async function OrdersPage({
             </Link>
           </Button>
         </div>
+      </div>
+
+      <div className="mb-4 flex gap-1 rounded-md bg-secondary p-1 sm:inline-flex">
+        <Link
+          href={(() => {
+            const p = new URLSearchParams(exportParams);
+            p.delete('tab');
+            p.delete('page');
+            return `/admin/orders?${p.toString()}`;
+          })()}
+          className={`flex-1 rounded px-3 py-1.5 text-center text-sm font-medium sm:flex-none ${
+            tab === 'active' ? 'bg-card shadow-sm' : 'text-muted-foreground'
+          }`}
+        >
+          Active orders
+        </Link>
+        <Link
+          href={(() => {
+            const p = new URLSearchParams(exportParams);
+            p.set('tab', 'past');
+            p.delete('page');
+            return `/admin/orders?${p.toString()}`;
+          })()}
+          className={`flex-1 rounded px-3 py-1.5 text-center text-sm font-medium sm:flex-none ${
+            tab === 'past' ? 'bg-card shadow-sm' : 'text-muted-foreground'
+          }`}
+        >
+          Past orders
+        </Link>
       </div>
 
       <div className="mb-4 flex flex-wrap gap-3">
@@ -227,27 +264,15 @@ export default async function OrdersPage({
             { value: 'name_desc', label: 'Customer (Z-A)' },
           ]}
         />
+        <PageSizeSelect />
       </div>
 
       <Card className="overflow-hidden">
         <OrdersList orders={orders as any} poBatches={poBatches} />
         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border p-3">
-          {viewAll ? (
-            <Link href={buildHref(1)} className="text-sm text-primary underline underline-offset-2">
-              Kembali ke tampilan per-halaman
-            </Link>
-          ) : (
-            <Link
-              href={(() => {
-                const p = new URLSearchParams(exportParams);
-                p.set('viewAll', '1');
-                return `/admin/orders?${p.toString()}`;
-              })()}
-              className="text-sm text-primary underline underline-offset-2"
-            >
-              Tampilkan semua ({total})
-            </Link>
-          )}
+          <p className="text-xs text-muted-foreground">
+            {viewAll ? `Menampilkan semua ${total} order` : `${total} order total`}
+          </p>
           {!viewAll && <Pagination page={page} totalPages={totalPages} buildHref={buildHref} />}
         </div>
       </Card>

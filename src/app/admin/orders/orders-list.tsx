@@ -8,7 +8,7 @@ import { Select } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { DeleteButton } from '@/components/delete-button';
 import { OrderStatusBadge, PaymentStatusBadge } from '@/components/status-badges';
-import { formatCurrency, formatDate } from '@/lib/utils';
+import { formatCurrency, formatDate, formatMonthYear } from '@/lib/utils';
 import { orderTypeLabels } from '@/lib/validations';
 import { deleteOrder, bulkAssignOrdersToBatch } from './actions';
 
@@ -286,7 +286,7 @@ export function OrdersList({
                         {o.etaMonth ? ` · ETA ${o.etaMonth}` : ''}
                       </span>
                     ) : (
-                      formatDate(o.expectedArrivalDate)
+                      formatMonthYear(o.expectedArrivalDate)
                     )}
                   </td>
                   <td className="px-4 py-3">

@@ -99,6 +99,11 @@ function toDateInputValue(d: Date | null | undefined): string {
   return new Date(d).toISOString().slice(0, 10);
 }
 
+function toMonthInputValue(d: Date | null | undefined): string {
+  if (!d) return '';
+  return new Date(d).toISOString().slice(0, 7);
+}
+
 function newRowKey() {
   return Math.random().toString(36).slice(2, 10);
 }
@@ -164,7 +169,7 @@ export function OrderForm({
     toDateInputValue(order?.orderDate) || new Date().toISOString().slice(0, 10)
   );
   const [expectedArrivalDate, setExpectedArrivalDate] = useState(
-    toDateInputValue(order?.expectedArrivalDate)
+    toMonthInputValue(order?.expectedArrivalDate)
   );
   const [actualArrivalDate, setActualArrivalDate] = useState(
     toDateInputValue(order?.actualArrivalDate)
@@ -652,7 +657,7 @@ export function OrderForm({
             <Label htmlFor="expectedArrivalDate">Expected warehouse arrival</Label>
             <Input
               id="expectedArrivalDate"
-              type="date"
+              type="month"
               value={expectedArrivalDate}
               onChange={(e) => setExpectedArrivalDate(e.target.value)}
             />
@@ -727,7 +732,7 @@ export function OrderForm({
                   </div>
                 </div>
 
-                <div className="mb-3 grid grid-cols-2 gap-3">
+                <div className="mb-3 space-y-3">
                   <div className="space-y-1.5">
                     <Label>ISBN</Label>
                     <Input value={row.isbn} onChange={(e) => updateItem(row.key, { isbn: e.target.value })} />
@@ -745,7 +750,7 @@ export function OrderForm({
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <div className="space-y-3">
                   <div className="space-y-1.5">
                     <Label>Quantity</Label>
                     <Input

@@ -6,7 +6,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { formatDate } from '@/lib/utils';
 import { EditAddressForm } from './edit-address-form';
 
-export default async function EditAddressPage() {
+export default async function EditAddressPage({
+  searchParams,
+}: {
+  searchParams: { required?: string; callbackUrl?: string };
+}) {
   const session = await getAuthSession();
   const customerId = session!.user.id;
 
@@ -18,27 +22,39 @@ export default async function EditAddressPage() {
     }),
   ]);
 
+  const isFirstTime = !customer?.address;
+
   return (
     <main className="min-h-screen bg-background p-4 sm:p-6">
       <div className="mx-auto max-w-sm">
-        <Link
-          href="/portal/dashboard"
-          className="mb-4 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft className="h-4 w-4" /> Back to your orders
-        </Link>
+        {!searchParams.required && (
+          <Link
+            href="/portal/dashboard"
+            className="mb-4 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+          >
+            <ArrowLeft className="h-4 w-4" /> Back to your orders
+          </Link>
+        )}
 
         <Card>
           <CardHeader>
-            <CardTitle>Update your address</CardTitle>
+            <CardTitle>{isFirstTime ? 'Isi alamat kamu dulu' : 'Update your address'}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div>
-              <p className="mb-1 text-xs uppercase tracking-wide text-muted-foreground">
-                Current address on file
+            {searchParams.required && isFirstTime && (
+              <p className="text-sm text-muted-foreground">
+                Sebelum bisa cek pesanan, kami perlu alamat kamu dulu buat keperluan pengiriman.
               </p>
-              <p className="text-sm">{customer?.address || 'No address on file yet.'}</p>
-            </div>
+            )}
+
+            {!isFirstTime && (
+              <div>
+                <p className="mb-1 text-xs uppercase tracking-wide text-muted-foreground">
+                  Current address on file
+                </p>
+                <p className="text-sm">{customer?.address}</p>
+              </div>
+            )}
 
             {pendingRequest && (
               <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
@@ -52,7 +68,11 @@ export default async function EditAddressPage() {
               </div>
             )}
 
-            <EditAddressForm defaultValue={pendingRequest?.newAddress ?? customer?.address ?? ''} />
+            <EditAddressForm
+              defaultValue={pendingRequest?.newAddress ?? customer?.address ?? ''}
+              isFirstTime={isFirstTime}
+              callbackUrl={searchParams.callbackUrl}
+            />
           </CardContent>
         </Card>
       </div>

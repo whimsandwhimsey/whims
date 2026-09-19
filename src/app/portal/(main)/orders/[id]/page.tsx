@@ -6,7 +6,7 @@ import { getAuthSession } from '@/lib/session';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { OrderStatusBadge, PaymentStatusBadge } from '@/components/status-badges';
-import { formatCurrency, formatDate } from '@/lib/utils';
+import { formatCurrency, formatDate, formatMonthYear } from '@/lib/utils';
 import { toNumber } from '@/lib/calculations';
 import { getPackingQueuePosition } from '@/lib/packing-queue';
 import { bookFormatLabels } from '@/lib/validations';
@@ -171,7 +171,7 @@ export default async function PortalOrderDetailPage({ params }: { params: { id: 
               </CardHeader>
               <CardContent className="space-y-1.5 text-sm">
                 <Row label="Order date" value={formatDate(order.orderDate)} />
-                <Row label="Estimated arrival" value={formatDate(order.expectedArrivalDate)} />
+                <Row label="Estimated arrival" value={formatMonthYear(order.expectedArrivalDate)} />
                 <Row label="Arrived" value={formatDate(order.actualArrivalDate)} />
               </CardContent>
             </Card>

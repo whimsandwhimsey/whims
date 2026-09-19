@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { PaymentStatusBadge } from '@/components/status-badges';
 import { DeleteButton } from '@/components/delete-button';
-import { formatCurrency, formatDate } from '@/lib/utils';
+import { formatCurrency, formatDate, formatMonthYear } from '@/lib/utils';
 import { toNumber } from '@/lib/calculations';
 import { getCustomerDepositBalance } from '@/lib/deposit';
 import { StatusChanger } from '../status-changer';
@@ -63,6 +63,7 @@ export default async function OrderDetailPage({
   });
 
   const totalQuantity = order.items.reduce((sum, item) => sum + item.quantity, 0);
+  const hasAnyDiscount = order.items.some((item) => toNumber(item.discount) > 0);
 
   const depositBalance = await getCustomerDepositBalance(order.customerId);
   const outstanding = toNumber(order.outstandingBalance);
@@ -163,10 +164,12 @@ export default async function OrderDetailPage({
                         <span className="text-muted-foreground">Price</span>
                         <span>{formatCurrency(item.sellingPrice.toString())}</span>
                       </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Discount</span>
-                        <span>{formatCurrency(item.discount.toString())}</span>
-                      </div>
+                      {hasAnyDiscount && (
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Discount</span>
+                          <span>{formatCurrency(item.discount.toString())}</span>
+                        </div>
+                      )}
                       <div className="flex justify-between font-medium">
                         <span className="text-muted-foreground font-normal">Subtotal</span>
                         <span>{formatCurrency(item.subtotal.toString())}</span>
@@ -190,7 +193,7 @@ export default async function OrderDetailPage({
                       <th className="px-4 py-2 font-medium">Title</th>
                       <th className="px-4 py-2 font-medium text-right">Qty</th>
                       <th className="px-4 py-2 font-medium text-right">Price</th>
-                      <th className="px-4 py-2 font-medium text-right">Discount</th>
+                      {hasAnyDiscount && <th className="px-4 py-2 font-medium text-right">Discount</th>}
                       <th className="px-4 py-2 font-medium text-right">Subtotal</th>
                       <th className="px-4 py-2 font-medium">OOS</th>
                     </tr>
@@ -215,7 +218,9 @@ export default async function OrderDetailPage({
                         </td>
                         <td className="px-4 py-2 text-right">{item.quantity}</td>
                         <td className="px-4 py-2 text-right">{formatCurrency(item.sellingPrice.toString())}</td>
-                        <td className="px-4 py-2 text-right">{formatCurrency(item.discount.toString())}</td>
+                        {hasAnyDiscount && (
+                          <td className="px-4 py-2 text-right">{formatCurrency(item.discount.toString())}</td>
+                        )}
                         <td className="px-4 py-2 text-right font-medium">
                           {formatCurrency(item.subtotal.toString())}
                         </td>
@@ -352,7 +357,9 @@ export default async function OrderDetailPage({
             </CardHeader>
             <CardContent className="space-y-1.5 text-sm">
               <Row label="Subtotal" value={formatCurrency(order.subtotal.toString())} />
-              <Row label="Discount" value={`- ${formatCurrency(order.discountTotal.toString())}`} />
+              {hasAnyDiscount && (
+                <Row label="Discount" value={`- ${formatCurrency(order.discountTotal.toString())}`} />
+              )}
               <Row label="Total" value={formatCurrency(order.totalAmount.toString())} bold />
               <Row label="Paid" value={formatCurrency(order.amountPaid.toString())} />
               <Row
@@ -369,7 +376,7 @@ export default async function OrderDetailPage({
             </CardHeader>
             <CardContent className="space-y-1.5 text-sm">
               <Row label="Order date" value={formatDate(order.orderDate)} />
-              <Row label="Expected arrival" value={formatDate(order.expectedArrivalDate)} />
+              <Row label="Expected arrival" value={formatMonthYear(order.expectedArrivalDate)} />
               <Row label="Actual arrival" value={formatDate(order.actualArrivalDate)} />
             </CardContent>
           </Card>

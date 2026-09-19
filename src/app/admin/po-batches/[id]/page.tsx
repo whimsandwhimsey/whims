@@ -6,13 +6,14 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DeleteButton } from '@/components/delete-button';
 import { OrderStatusBadge, PaymentStatusBadge } from '@/components/status-badges';
-import { formatCurrency, formatDate } from '@/lib/utils';
+import { formatCurrency, formatDate, formatMonthYear } from '@/lib/utils';
 import { deletePoBatch, togglePoBatchOpen } from '../actions';
 import { GenerateInvoicesButton } from '../generate-invoices-button';
 import { BatchStatusChanger } from '../batch-status-changer';
 import { MultiSelectFilter } from '@/components/multi-select-filter';
 import { SortSelect } from '@/components/sort-select';
 import { ExportBuilderButton } from '@/components/export-builder-button';
+import { BookRowExpandable } from './book-row-expandable';
 
 const TYPE_LABELS: Record<string, string> = {
   PO_REGULAR: 'PO Reguler',
@@ -47,29 +48,40 @@ export default async function PoBatchDetailPage({
     include: {
       supplier: { select: { name: true } },
       orders: {
-        include: { customer: true, items: true },
+        include: { customer: true, items: true, invoices: { select: { sentAt: true } } },
         orderBy: { orderDate: 'desc' },
       },
     },
   });
   if (!batch) notFound();
 
-  const bookSummary = new Map<string, { title: string; quantity: number; subtotal: number }>();
+  const bookSummary = new Map<
+    string,
+    { title: string; quantity: number; subtotal: number; buyers: { name: string; phoneLast4: string }[] }
+  >();
   for (const o of batch.orders) {
     for (const it of o.items) {
       const key = it.isbn || it.bookTitle;
       const existing = bookSummary.get(key);
       const subtotal = Number(it.subtotal.toString());
+      const buyer = { name: o.customer.name, phoneLast4: o.customer.phone.slice(-4) };
       if (existing) {
         existing.quantity += it.quantity;
         existing.subtotal += subtotal;
+        existing.buyers.push(buyer);
       } else {
-        bookSummary.set(key, { title: it.bookTitle, quantity: it.quantity, subtotal });
+        bookSummary.set(key, { title: it.bookTitle, quantity: it.quantity, subtotal, buyers: [buyer] });
       }
     }
   }
   const bookRows = [...bookSummary.values()].sort((a, b) => a.title.localeCompare(b.title));
   const totalBookQuantity = bookRows.reduce((sum, r) => sum + r.quantity, 0);
+
+  // Payment / invoice-sent summary for the whole batch.
+  const paidCount = batch.orders.filter((o) => o.paymentStatus === 'PAID' || o.paymentStatus === 'OVERPAID').length;
+  const unpaidCount = batch.orders.filter((o) => o.paymentStatus === 'UNPAID' || o.paymentStatus === 'PARTIAL').length;
+  const sentCount = batch.orders.filter((o) => o.invoices.some((inv) => inv.sentAt)).length;
+  const totalOrderValue = batch.orders.reduce((sum, o) => sum + Number(o.totalAmount.toString()), 0);
 
   const paymentStatuses = (searchParams.paymentStatus ?? '').split(',').filter(Boolean);
   const sort = searchParams.sort === 'name_desc' ? 'name_desc' : searchParams.sort === 'name_asc' ? 'name_asc' : 'recent';
@@ -140,11 +152,32 @@ export default async function PoBatchDetailPage({
           {TYPE_LABELS[batch.type]}
           {batch.supplier ? ` · Supplier: ${batch.supplier.name}` : ' · No supplier set'} · Opened{' '}
           {formatDate(batch.batchDate)}
-          {batch.expectedArrivalDate ? ` · Expected ${formatDate(batch.expectedArrivalDate)}` : ''}
+          {batch.expectedArrivalDate ? ` · Expected ${formatMonthYear(batch.expectedArrivalDate)}` : ''}
         </p>
         <p className="mt-1 text-sm text-brass">Invoice rule: {TYPE_RULE[batch.type]}</p>
         {batch.notes && <p className="mt-2 text-sm text-muted-foreground">{batch.notes}</p>}
       </div>
+
+      <Card className="mb-6">
+        <CardContent className="grid grid-cols-2 gap-3 pt-6 sm:grid-cols-4">
+          <div>
+            <p className="text-xs text-muted-foreground">Total order value</p>
+            <p className="text-lg font-semibold">{formatCurrency(totalOrderValue)}</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Paid</p>
+            <p className="text-lg font-semibold text-success">{paidCount}</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Unpaid</p>
+            <p className="text-lg font-semibold text-destructive">{unpaidCount}</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground">Invoice terkirim</p>
+            <p className="text-lg font-semibold">{sentCount}</p>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card className="mb-6">
         <CardHeader>
@@ -168,7 +201,9 @@ export default async function PoBatchDetailPage({
               <tbody className="divide-y divide-border">
                 {bookRows.map((r, idx) => (
                   <tr key={idx}>
-                    <td className="px-4 py-2">{r.title}</td>
+                    <td className="px-4 py-2">
+                      <BookRowExpandable title={r.title} buyers={r.buyers} />
+                    </td>
                     <td className="px-4 py-2 text-right">{r.quantity}</td>
                     <td className="px-4 py-2 text-right">{formatCurrency(r.subtotal)}</td>
                   </tr>

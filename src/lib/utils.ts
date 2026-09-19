@@ -25,6 +25,18 @@ export function formatDate(date: Date | string | null | undefined): string {
   }).format(d);
 }
 
+/** For ETA / expected-arrival dates — these are always month-level
+ * estimates, never a specific day, so shown (and entered) as just the
+ * month to avoid implying a precision that doesn't exist. */
+export function formatMonthYear(date: Date | string | null | undefined): string {
+  if (!date) return '—';
+  const d = typeof date === 'string' ? new Date(date) : date;
+  return new Intl.DateTimeFormat('en-GB', {
+    month: 'short',
+    year: 'numeric',
+  }).format(d);
+}
+
 /** Normalizes a phone number for consistent lookups (strips spaces/dashes, leading 0 -> 62). */
 export function normalizePhone(raw: string): string {
   let phone = raw.replace(/[^\d+]/g, '');

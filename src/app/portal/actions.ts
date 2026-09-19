@@ -108,6 +108,30 @@ export async function requestAddressChange(formData: FormData): Promise<ActionRe
   }
 
   try {
+    const customer = await prisma.customer.findUnique({ where: { id: session.user.id } });
+
+    // First-ever address — save immediately, no approval needed, since
+    // there's no existing correct address at risk of being overwritten.
+    // Only a CHANGE to an address that's already on file goes through
+    // staff confirmation.
+    if (!customer?.address) {
+      await prisma.customer.update({
+        where: { id: session.user.id },
+        data: { address: parsed.data.newAddress },
+      });
+
+      await writeAuditLog({
+        action: 'UPDATE',
+        entityType: 'Customer',
+        entityId: session.user.id,
+        summary: 'Customer set their address for the first time',
+      });
+
+      revalidatePath('/portal/profile/edit-address');
+      revalidatePath('/portal/dashboard');
+      return { success: true };
+    }
+
     // Only one pending request at a time — replace it rather than piling up.
     const existingPending = await prisma.addressChangeRequest.findFirst({
       where: { customerId: session.user.id, status: 'PENDING' },

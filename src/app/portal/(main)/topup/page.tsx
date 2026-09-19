@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { QrisDisplay } from '@/components/qris-display';
-import { requestTopUp } from '../actions';
+import { requestTopUp } from '../../actions';
 
 // Admin's WhatsApp number, in wa.me format (country code, no +, no spaces).
 const ADMIN_WHATSAPP = '628561222325';

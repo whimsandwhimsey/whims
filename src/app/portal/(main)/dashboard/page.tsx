@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { PaymentStatusBadge } from '@/components/status-badges';
 import { SearchBox } from '@/components/search-box';
 import { UrlFilterSelect } from '@/components/url-filter-select';
-import { formatCurrency, formatDate } from '@/lib/utils';
+import { formatCurrency, formatDate, formatMonthYear } from '@/lib/utils';
 import { toNumber } from '@/lib/calculations';
 import { PayOngkirButton } from './pay-ongkir-button';
 
@@ -38,7 +38,7 @@ export default async function PortalDashboardPage({
   const [customer, orders, shipments, depositBalance] = await Promise.all([
     prisma.customer.findUnique({ where: { id: customerId } }),
     prisma.order.findMany({
-      where: { customerId, status: { not: 'CANCELLED' } },
+      where: { customerId, status: { notIn: ['CANCELLED', 'COMPLETED', 'SHIPPED'] } },
       orderBy: { orderDate: 'desc' },
       include: {
         items: true,
@@ -163,8 +163,11 @@ export default async function PortalDashboardPage({
 
         {/* 3. Order details — item level, filterable */}
         <Card>
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>Your order details</CardTitle>
+            <Link href="/portal/orders" className="text-xs text-primary underline underline-offset-2">
+              Lihat semua riwayat pesanan
+            </Link>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex flex-wrap gap-3">
@@ -212,7 +215,7 @@ export default async function PortalDashboardPage({
                             <p className="text-sm font-medium">{o.poBatch?.name ?? o.orderNumber}</p>
                             <p className="text-xs text-muted-foreground">
                               {o.poBatch ? o.orderNumber : 'No batch'}
-                              {o.expectedArrivalDate ? ` · ETA ${formatDate(o.expectedArrivalDate)}` : ''}
+                              {o.expectedArrivalDate ? ` · ETA ${formatMonthYear(o.expectedArrivalDate)}` : ''}
                             </p>
                           </div>
                           <p className="text-sm font-medium">{formatCurrency(toNumber(o.totalAmount))}</p>

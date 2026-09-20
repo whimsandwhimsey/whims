@@ -423,6 +423,8 @@ model DepositTransaction {
   order         Order?         @relation(fields: [orderId], references: [id])
   invoiceId     String?        // for USED: the specific invoice this deposit was applied to
   invoice       Invoice?       @relation(fields: [invoiceId], references: [id])
+  shipmentId    String?        // for USED: or, this deposit was applied to a shipment's ongkir instead
+  shipment      Shipment?      @relation(fields: [shipmentId], references: [id])
   notes         String?
 
   createdById   String?
@@ -431,6 +433,7 @@ model DepositTransaction {
 
   @@index([customerId])
   @@index([invoiceId])
+  @@index([shipmentId])
   @@map("deposit_transactions")
 }
 
@@ -464,6 +467,15 @@ model Invoice {
   payments       Payment[]
   depositTxns    DepositTransaction[]
   paymentRequests InvoicePaymentRequest[]
+
+  // When ongkir is billed together with this invoice (one combined bill
+  // the customer sees and pays as one number), this points at the
+  // Shipment carrying the shipping-fee side of it. Invoice.amount never
+  // includes the shipping fee — that stays on the Shipment — this is
+  // purely a display/payment-splitting link, keeping book vs. ongkir
+  // accounting cleanly separate underneath a single customer-facing bill.
+  linkedShipmentId String?  @unique
+  linkedShipment   Shipment? @relation(fields: [linkedShipmentId], references: [id])
 
   @@index([orderId])
   @@map("invoices")
@@ -554,7 +566,7 @@ model Shipment {
   customerId         String
   customer           Customer      @relation(fields: [customerId], references: [id])
   courier            Courier
-  trackingNumber     String
+  trackingNumber     String?       // null until the order is actually packed & shipped — can exist "billing-only" first
   shippingCost       Decimal       @db.Decimal(12, 2)
   amountPaid         Decimal       @default(0) @db.Decimal(12, 2)
   outstandingBalance Decimal       @db.Decimal(12, 2)
@@ -565,6 +577,8 @@ model Shipment {
 
   orders             Order[]
   payments           Payment[]
+  depositTxns        DepositTransaction[]
+  linkedInvoice      Invoice?
 
   @@index([customerId])
   @@map("shipments")

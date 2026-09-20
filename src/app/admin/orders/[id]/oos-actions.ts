@@ -81,27 +81,29 @@ export async function resolveItemOos(
     if (!item) return { success: false, error: 'Item not found.' };
     if (!item.isOos) return { success: false, error: 'Item is not marked OOS.' };
 
-    await prisma.orderItem.update({
-      where: { id: orderItemId },
-      data: { oosResolution: resolution, oosResolvedAt: new Date(), oosNotes: notes || null },
-    });
-
-    if (resolution === 'DEPOSIT') {
-      const balance = await getCustomerDepositBalance(item.order.customerId);
-      const amount = toNumber(item.subtotal);
-      await prisma.depositTransaction.create({
-        data: {
-          customerId: item.order.customerId,
-          type: 'TOP_UP',
-          amount,
-          balanceAfter: balance + amount,
-          orderId: item.orderId,
-          notes: `OOS "${item.bookTitle}" on order ${item.order.orderNumber} — converted to deposit`,
-          createdById: session.user.id,
-        },
+    await prisma.$transaction(async (tx) => {
+      await tx.orderItem.update({
+        where: { id: orderItemId },
+        data: { oosResolution: resolution, oosResolvedAt: new Date(), oosNotes: notes || null },
       });
-      await recalculateDepositLedger(item.order.customerId);
-    }
+
+      if (resolution === 'DEPOSIT') {
+        const balance = await getCustomerDepositBalance(item.order.customerId);
+        const amount = toNumber(item.subtotal);
+        await tx.depositTransaction.create({
+          data: {
+            customerId: item.order.customerId,
+            type: 'TOP_UP',
+            amount,
+            balanceAfter: balance + amount,
+            orderId: item.orderId,
+            notes: `OOS "${item.bookTitle}" on order ${item.order.orderNumber} — converted to deposit`,
+            createdById: session.user.id,
+          },
+        });
+        await recalculateDepositLedger(item.order.customerId, tx);
+      }
+    });
 
     await writeAuditLog({
       userId: session.user.id,

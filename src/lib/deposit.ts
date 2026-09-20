@@ -1,5 +1,8 @@
 import { prisma } from '@/lib/prisma';
 import { toNumber } from '@/lib/calculations';
+import type { Prisma } from '@prisma/client';
+
+type DbClient = typeof prisma | Prisma.TransactionClient;
 
 /**
  * A customer's current deposit balance is always the `balanceAfter` of their
@@ -22,9 +25,15 @@ export async function getCustomerDepositBalance(customerId: string): Promise<num
  * that had generated a TOP_UP) — simplest way to guarantee the whole
  * ledger stays internally consistent rather than patching balances
  * incrementally.
+ *
+ * Pass the `tx` from an enclosing `prisma.$transaction(...)` when this is
+ * part of a larger atomic operation (e.g. applying deposit to an invoice) —
+ * otherwise the ledger update and the invoice/payment update it belongs
+ * with could commit separately, leaving one applied and the other not if
+ * something fails in between.
  */
-export async function recalculateDepositLedger(customerId: string): Promise<void> {
-  const transactions = await prisma.depositTransaction.findMany({
+export async function recalculateDepositLedger(customerId: string, client: DbClient = prisma): Promise<void> {
+  const transactions = await client.depositTransaction.findMany({
     where: { customerId },
     orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
   });
@@ -35,7 +44,7 @@ export async function recalculateDepositLedger(customerId: string): Promise<void
     running += txn.type === 'USED' || txn.type === 'REFUND' ? -amount : amount;
     running = Math.round(running * 100) / 100;
     if (toNumber(txn.balanceAfter) !== running) {
-      await prisma.depositTransaction.update({
+      await client.depositTransaction.update({
         where: { id: txn.id },
         data: { balanceAfter: running },
       });

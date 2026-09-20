@@ -17,6 +17,7 @@ export default async function AdminInvoiceDetailPage({ params }: { params: { id:
     where: { id: params.id },
     include: {
       order: { include: { customer: true, items: true, invoices: { where: { type: 'DEPOSIT' } } } },
+      linkedShipment: true,
     },
   });
   if (!invoice) notFound();
@@ -30,6 +31,13 @@ export default async function AdminInvoiceDetailPage({ params }: { params: { id:
       invoice.type === 'FINAL_PAYMENT'
         ? invoice.order.invoices.reduce((sum, dp) => sum + toNumber(dp.amount), 0)
         : undefined,
+    ongkir: invoice.linkedShipment
+      ? {
+          courier: invoice.linkedShipment.courier,
+          cost: toNumber(invoice.linkedShipment.shippingCost),
+          outstanding: toNumber(invoice.linkedShipment.outstandingBalance),
+        }
+      : undefined,
     order: {
       orderNumber: invoice.order.orderNumber,
       orderDate: invoice.order.orderDate,

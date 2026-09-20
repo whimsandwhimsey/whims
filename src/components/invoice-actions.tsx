@@ -18,10 +18,11 @@ function firstName(fullName: string): string {
 }
 
 function buildWhatsAppText(data: InvoiceDocumentData): string {
+  const total = data.amount + (data.ongkir?.cost ?? 0);
   const lines = [
     `Hi kak ${firstName(data.customer.name)}, ini invoice ${TYPE_LABELS[data.type]} buat order ${data.order.orderNumber} ya 📚`,
     '',
-    `Tagihan: ${formatCurrency(data.amount)}`,
+    `Tagihan: ${formatCurrency(total)}${data.ongkir ? ' (udah termasuk ongkir)' : ''}`,
     'Detail item & QRIS pembayaran ada di gambar invoice-nya.',
     '',
     'Ada pertanyaan, langsung balas chat ini aja. Makasih! 🐈‍⬛',

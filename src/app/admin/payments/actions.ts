@@ -6,8 +6,9 @@ import { prisma } from '@/lib/prisma';
 import { requireStaffSession } from '@/lib/guards';
 import { writeAuditLog } from '@/lib/audit';
 import { getCustomerDepositBalance, recalculateDepositLedger } from '@/lib/deposit';
-import { toNumber } from '@/lib/calculations';
+import { toNumber, round2 } from '@/lib/calculations';
 import { recalculateInvoiceFinancials } from '@/lib/invoice-calculations';
+import { recalculateShipmentFinancials } from '@/lib/shipment-calculations';
 
 export type ActionResult = { success: true } | { success: false; error: string };
 
@@ -27,6 +28,108 @@ const paymentFormSchema = z.object({
  * The actual math is delegated to recalculateInvoiceFinancials so creating,
  * editing, and deleting a payment all go through the exact same logic.
  */
+const combinedPaymentSchema = z.object({
+  amount: z.coerce.number().positive('Amount must be greater than zero'),
+  method: z.enum(['QRIS', 'BANK_TRANSFER']),
+  date: z.string().min(1),
+  notes: z.string().max(500).optional().or(z.literal('')),
+});
+
+/**
+ * Records ONE payment against a combined bill (invoice + its linked
+ * shipment ongkir) — the customer sees and pays one number, but under the
+ * hood this splits into up to two Payment records so book and ongkir
+ * accounting stay separate: book's own outstanding is paid down first,
+ * anything left over after that goes to ongkir. Any amount beyond BOTH
+ * outstandings flows back through the invoice's own Payment (its existing
+ * overflow-to-deposit logic picks it up from there) rather than teaching
+ * the shipment side a second copy of that behavior.
+ */
+export async function recordCombinedPayment(invoiceId: string, formData: FormData): Promise<ActionResult> {
+  const session = await requireStaffSession();
+  const parsed = combinedPaymentSchema.safeParse({
+    amount: formData.get('amount'),
+    method: formData.get('method'),
+    date: formData.get('date'),
+    notes: formData.get('notes') ?? '',
+  });
+  if (!parsed.success) {
+    const firstError = Object.values(parsed.error.flatten().fieldErrors)[0]?.[0];
+    return { success: false, error: firstError ?? 'Please check the form.' };
+  }
+  const data = parsed.data;
+
+  try {
+    const { invoice } = await prisma.$transaction(async (tx) => {
+      const invoice = await tx.invoice.findUnique({
+        where: { id: invoiceId },
+        include: { order: true, linkedShipment: true },
+      });
+      if (!invoice) throw new Error('Invoice not found.');
+      if (!invoice.linkedShipment) throw new Error('This invoice has no ongkir bundled with it.');
+
+      const outstandingInvoice = toNumber(invoice.outstandingBalance);
+      const outstandingShipment = toNumber(invoice.linkedShipment.outstandingBalance);
+
+      // Book first, then ongkir, then whatever's left overflows through
+      // the invoice payment (which already knows how to turn excess into
+      // deposit) — see the function doc above.
+      const appliedToShipment = Math.min(Math.max(0, data.amount - outstandingInvoice), outstandingShipment);
+      const invoicePaymentAmount = round2(data.amount - appliedToShipment);
+
+      await tx.payment.create({
+        data: {
+          customerId: invoice.order.customerId,
+          orderId: invoice.orderId,
+          invoiceId,
+          date: new Date(data.date),
+          amount: invoicePaymentAmount,
+          method: data.method,
+          notes: data.notes || null,
+          recordedById: session.user.id,
+        },
+      });
+      await recalculateInvoiceFinancials(invoiceId, tx);
+
+      if (appliedToShipment > 0) {
+        await tx.payment.create({
+          data: {
+            customerId: invoice.order.customerId,
+            shipmentId: invoice.linkedShipment.id,
+            date: new Date(data.date),
+            amount: appliedToShipment,
+            method: data.method,
+            notes: `Ongkir portion of combined payment on invoice ${invoice.invoiceNumber}`,
+            recordedById: session.user.id,
+          },
+        });
+        await recalculateShipmentFinancials(invoice.linkedShipment.id, tx);
+      }
+
+      return { invoice };
+    });
+
+    await writeAuditLog({
+      userId: session.user.id,
+      action: 'CREATE',
+      entityType: 'Payment',
+      entityId: invoiceId,
+      summary: `Recorded combined payment of ${data.amount} for invoice ${invoice.invoiceNumber} (book + ongkir)`,
+    });
+
+    revalidatePath(`/admin/orders/${invoice.orderId}`);
+    revalidatePath(`/admin/invoices/${invoiceId}`);
+    revalidatePath('/admin/orders');
+    revalidatePath('/admin/invoices');
+    revalidatePath('/admin/payments');
+    revalidatePath('/admin/shipments');
+    return { success: true };
+  } catch (err) {
+    console.error(err);
+    return { success: false, error: err instanceof Error ? err.message : 'Failed to record payment.' };
+  }
+}
+
 export async function recordPayment(invoiceId: string, formData: FormData): Promise<ActionResult> {
   const session = await requireStaffSession();
   const parsed = paymentFormSchema.safeParse({
@@ -42,23 +145,30 @@ export async function recordPayment(invoiceId: string, formData: FormData): Prom
   const data = parsed.data;
 
   try {
-    const invoice = await prisma.invoice.findUnique({ where: { id: invoiceId }, include: { order: true } });
-    if (!invoice) return { success: false, error: 'Invoice not found.' };
+    const { payment, invoice } = await prisma.$transaction(async (tx) => {
+      const invoice = await tx.invoice.findUnique({ where: { id: invoiceId }, include: { order: true } });
+      if (!invoice) throw new Error('Invoice not found.');
 
-    const payment = await prisma.payment.create({
-      data: {
-        customerId: invoice.order.customerId,
-        orderId: invoice.orderId,
-        invoiceId,
-        date: new Date(data.date),
-        amount: data.amount,
-        method: data.method,
-        notes: data.notes || null,
-        recordedById: session.user.id,
-      },
+      const payment = await tx.payment.create({
+        data: {
+          customerId: invoice.order.customerId,
+          orderId: invoice.orderId,
+          invoiceId,
+          date: new Date(data.date),
+          amount: data.amount,
+          method: data.method,
+          notes: data.notes || null,
+          recordedById: session.user.id,
+        },
+      });
+
+      // Same transaction as the Payment above — if this fails, the payment
+      // itself rolls back too, instead of a payment existing that the
+      // invoice's own paid/outstanding never picked up.
+      await recalculateInvoiceFinancials(invoiceId, tx);
+
+      return { payment, invoice };
     });
-
-    await recalculateInvoiceFinancials(invoiceId);
 
     await writeAuditLog({
       userId: session.user.id,
@@ -170,30 +280,32 @@ export async function editPayment(paymentId: string, formData: FormData): Promis
     const before = await prisma.payment.findUnique({ where: { id: paymentId } });
     if (!before) return { success: false, error: 'Payment not found.' };
 
-    await prisma.payment.update({
-      where: { id: paymentId },
-      data: {
-        amount: data.amount,
-        method: data.method,
-        date: new Date(data.date),
-        notes: data.notes || null,
-      },
-    });
-
-    if (before.invoiceId) {
-      await recalculateInvoiceFinancials(before.invoiceId);
-    } else {
-      const topUp = await prisma.depositTransaction.findFirst({
-        where: { customerId: before.customerId, type: 'TOP_UP', notes: { contains: `payment:${before.id}` } },
+    await prisma.$transaction(async (tx) => {
+      await tx.payment.update({
+        where: { id: paymentId },
+        data: {
+          amount: data.amount,
+          method: data.method,
+          date: new Date(data.date),
+          notes: data.notes || null,
+        },
       });
-      if (topUp) {
-        await prisma.depositTransaction.update({
-          where: { id: topUp.id },
-          data: { amount: data.amount },
+
+      if (before.invoiceId) {
+        await recalculateInvoiceFinancials(before.invoiceId, tx);
+      } else {
+        const topUp = await tx.depositTransaction.findFirst({
+          where: { customerId: before.customerId, type: 'TOP_UP', notes: { contains: `payment:${before.id}` } },
         });
-        await recalculateDepositLedger(before.customerId);
+        if (topUp) {
+          await tx.depositTransaction.update({
+            where: { id: topUp.id },
+            data: { amount: data.amount },
+          });
+          await recalculateDepositLedger(before.customerId, tx);
+        }
       }
-    }
+    });
 
     await writeAuditLog({
       userId: session.user.id,
@@ -222,18 +334,20 @@ export async function deletePayment(paymentId: string): Promise<ActionResult> {
     const payment = await prisma.payment.findUnique({ where: { id: paymentId } });
     if (!payment) return { success: false, error: 'Payment not found.' };
 
-    const linkedTopUp = await prisma.depositTransaction.findFirst({
-      where: { customerId: payment.customerId, type: 'TOP_UP', notes: { contains: `payment:${payment.id}` } },
+    await prisma.$transaction(async (tx) => {
+      const linkedTopUp = await tx.depositTransaction.findFirst({
+        where: { customerId: payment.customerId, type: 'TOP_UP', notes: { contains: `payment:${payment.id}` } },
+      });
+
+      await tx.payment.delete({ where: { id: paymentId } });
+
+      if (payment.invoiceId) {
+        await recalculateInvoiceFinancials(payment.invoiceId, tx);
+      } else if (linkedTopUp) {
+        await tx.depositTransaction.delete({ where: { id: linkedTopUp.id } });
+        await recalculateDepositLedger(payment.customerId, tx);
+      }
     });
-
-    await prisma.payment.delete({ where: { id: paymentId } });
-
-    if (payment.invoiceId) {
-      await recalculateInvoiceFinancials(payment.invoiceId);
-    } else if (linkedTopUp) {
-      await prisma.depositTransaction.delete({ where: { id: linkedTopUp.id } });
-      await recalculateDepositLedger(payment.customerId);
-    }
 
     await writeAuditLog({
       userId: session.user.id,
@@ -265,45 +379,79 @@ export async function applyDepositToInvoice(invoiceId: string, formData: FormDat
 
   try {
     await prisma.$transaction(async (tx) => {
-      const invoice = await tx.invoice.findUnique({ where: { id: invoiceId }, include: { order: true } });
+      const invoice = await tx.invoice.findUnique({
+        where: { id: invoiceId },
+        include: { order: true, linkedShipment: true },
+      });
       if (!invoice) throw new Error('Invoice not found.');
 
       const depositBalance = await getCustomerDepositBalance(invoice.order.customerId);
-      const outstanding = toNumber(invoice.outstandingBalance);
+      const outstandingInvoice = toNumber(invoice.outstandingBalance);
+      const outstandingShipment = invoice.linkedShipment ? toNumber(invoice.linkedShipment.outstandingBalance) : 0;
+      const combinedOutstanding = outstandingInvoice + outstandingShipment;
 
       if (amount > depositBalance) throw new Error("Amount exceeds the customer's deposit balance.");
-      if (amount > outstanding) throw new Error("Amount exceeds this invoice's outstanding balance.");
+      if (amount > combinedOutstanding) throw new Error("Amount exceeds this invoice's outstanding balance.");
 
-      const newBalance = depositBalance - amount;
-      await tx.depositTransaction.create({
-        data: {
-          customerId: invoice.order.customerId,
-          type: 'USED',
-          amount,
-          balanceAfter: newBalance,
-          orderId: invoice.orderId,
-          invoiceId,
-          notes: `Applied to invoice ${invoice.invoiceNumber}`,
-          createdById: session.user.id,
-        },
-      });
+      // Book first, then ongkir — same split rule as a combined cash payment.
+      const appliedToShipment = invoice.linkedShipment
+        ? Math.min(Math.max(0, amount - outstandingInvoice), outstandingShipment)
+        : 0;
+      const appliedToInvoice = round2(amount - appliedToShipment);
+
+      let newBalance = depositBalance;
+      if (appliedToInvoice > 0) {
+        newBalance -= appliedToInvoice;
+        await tx.depositTransaction.create({
+          data: {
+            customerId: invoice.order.customerId,
+            type: 'USED',
+            amount: appliedToInvoice,
+            balanceAfter: newBalance,
+            orderId: invoice.orderId,
+            invoiceId,
+            notes: `Applied to invoice ${invoice.invoiceNumber}`,
+            createdById: session.user.id,
+          },
+        });
+      }
+      // Same transaction as the deposit debit(s) above — if this fails,
+      // they roll back too, instead of leaving the customer's deposit
+      // reduced while the invoice still shows the old, un-applied balance.
+      await recalculateInvoiceFinancials(invoiceId, tx);
+
+      if (appliedToShipment > 0 && invoice.linkedShipment) {
+        newBalance -= appliedToShipment;
+        await tx.depositTransaction.create({
+          data: {
+            customerId: invoice.order.customerId,
+            type: 'USED',
+            amount: appliedToShipment,
+            balanceAfter: newBalance,
+            orderId: invoice.orderId,
+            shipmentId: invoice.linkedShipment.id,
+            notes: `Applied to ongkir on invoice ${invoice.invoiceNumber} (resi ${invoice.linkedShipment.trackingNumber ?? 'belum ada'})`,
+            createdById: session.user.id,
+          },
+        });
+        await recalculateShipmentFinancials(invoice.linkedShipment.id, tx);
+      }
 
       await writeAuditLog({
         userId: session.user.id,
         action: 'UPDATE',
         entityType: 'Invoice',
         entityId: invoiceId,
-        summary: `Applied ${amount} deposit to invoice ${invoice.invoiceNumber}`,
+        summary: `Applied ${amount} deposit to invoice ${invoice.invoiceNumber}${appliedToShipment > 0 ? ' (incl. ongkir)' : ''}`,
       });
     });
-
-    await recalculateInvoiceFinancials(invoiceId);
 
     const invoice = await prisma.invoice.findUnique({ where: { id: invoiceId } });
     revalidatePath(`/admin/invoices/${invoiceId}`);
     if (invoice) revalidatePath(`/admin/orders/${invoice.orderId}`);
     revalidatePath('/admin/orders');
     revalidatePath('/admin/payments');
+    revalidatePath('/admin/shipments');
     return { success: true };
   } catch (err) {
     console.error(err);

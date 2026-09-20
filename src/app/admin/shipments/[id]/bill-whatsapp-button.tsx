@@ -11,11 +11,12 @@ export function BillShippingWhatsAppButton({
 }: {
   customerName: string;
   customerPhone: string;
-  trackingNumber: string;
+  trackingNumber: string | null;
   shippingCost: number;
 }) {
+  const resiText = trackingNumber ? `resi ${trackingNumber}` : 'pesanan kamu';
   const text = encodeURIComponent(
-    `Halo kak ${customerName}, mohon bantu bayar ongkir buat resi ${trackingNumber} sebesar Rp${shippingCost.toLocaleString('id-ID')} ya. Makasih! 🐈‍⬛`
+    `Halo kak ${customerName}, mohon bantu bayar ongkir buat ${resiText} sebesar Rp${shippingCost.toLocaleString('id-ID')} ya. Makasih! 🐈‍⬛`
   );
   const phone = customerPhone.replace(/[^0-9]/g, '');
 

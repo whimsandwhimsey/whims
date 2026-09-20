@@ -145,24 +145,29 @@ export async function confirmInvoicePaymentRequest(id: string) {
 
   const amount = Number(request.amount.toString());
 
-  await prisma.payment.create({
-    data: {
-      customerId: request.customerId,
-      orderId: request.invoice.orderId,
-      invoiceId: request.invoiceId,
-      date: new Date(),
-      amount,
-      method: 'QRIS',
-      notes: `Customer self-service invoice payment (confirmed via WhatsApp) — invoice ${request.invoice.invoiceNumber}`,
-      recordedById: session.user.id,
-    },
-  });
+  await prisma.$transaction(async (tx) => {
+    await tx.payment.create({
+      data: {
+        customerId: request.customerId,
+        orderId: request.invoice.orderId,
+        invoiceId: request.invoiceId,
+        date: new Date(),
+        amount,
+        method: 'QRIS',
+        notes: `Customer self-service invoice payment (confirmed via WhatsApp) — invoice ${request.invoice.invoiceNumber}`,
+        recordedById: session.user.id,
+      },
+    });
 
-  await recalculateInvoiceFinancials(request.invoiceId);
+    // Same transaction as the Payment above — if this fails, the payment
+    // rolls back too, instead of a payment existing that the invoice's
+    // own paid/outstanding never picked up.
+    await recalculateInvoiceFinancials(request.invoiceId, tx);
 
-  await prisma.invoicePaymentRequest.update({
-    where: { id },
-    data: { status: 'CONFIRMED', confirmedAt: new Date(), confirmedById: session.user.id },
+    await tx.invoicePaymentRequest.update({
+      where: { id },
+      data: { status: 'CONFIRMED', confirmedAt: new Date(), confirmedById: session.user.id },
+    });
   });
 
   await writeAuditLog({

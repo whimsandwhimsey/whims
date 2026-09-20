@@ -6,11 +6,18 @@ import { prisma } from '@/lib/prisma';
 import { requireStaffSession } from '@/lib/guards';
 import { writeAuditLog } from '@/lib/audit';
 import { generateInvoiceNumber } from '@/lib/invoice-number';
+import { courierValues } from '@/lib/validations';
 
 const createInvoiceSchema = z.object({
   orderId: z.string().min(1),
   type: z.enum(['DEPOSIT', 'FINAL_PAYMENT', 'READY_STOCK']),
   amount: z.coerce.number().positive('Amount must be greater than zero'),
+  ongkir: z
+    .object({
+      courier: z.enum(courierValues),
+      shippingCost: z.coerce.number().min(0),
+    })
+    .optional(),
 });
 
 export type ActionResult =
@@ -32,17 +39,46 @@ export async function createInvoice(input: z.infer<typeof createInvoiceSchema>):
 
     const invoiceNumber = await generateInvoiceNumber();
 
-    const invoice = await prisma.invoice.create({
-      data: {
-        invoiceNumber,
-        orderId: data.orderId,
-        type: data.type,
-        amount: data.amount,
-        amountPaid: 0,
-        outstandingBalance: data.amount,
-        paymentStatus: 'UNPAID',
-        issuedById: session.user.id,
-      },
+    const invoice = await prisma.$transaction(async (tx) => {
+      // Ongkir bundled into this bill — a real Shipment record (its own
+      // amount, its own paid/outstanding) so book vs. shipping accounting
+      // stays cleanly separate, just linked to this invoice so the
+      // customer sees ONE combined total. Tracking number is left empty —
+      // filled in later from Packing List once actually shipped.
+      let shipmentId: string | null = null;
+      if (data.ongkir && data.ongkir.shippingCost > 0) {
+        const shipment = await tx.shipment.create({
+          data: {
+            customerId: order.customerId,
+            courier: data.ongkir.courier,
+            trackingNumber: null,
+            shippingCost: data.ongkir.shippingCost,
+            amountPaid: 0,
+            outstandingBalance: data.ongkir.shippingCost,
+            paymentStatus: 'UNPAID',
+            createdById: session.user.id,
+          },
+        });
+        shipmentId = shipment.id;
+        await tx.order.update({
+          where: { id: data.orderId },
+          data: { shipmentId: shipment.id, courier: data.ongkir.courier },
+        });
+      }
+
+      return tx.invoice.create({
+        data: {
+          invoiceNumber,
+          orderId: data.orderId,
+          type: data.type,
+          amount: data.amount,
+          amountPaid: 0,
+          outstandingBalance: data.amount,
+          paymentStatus: 'UNPAID',
+          issuedById: session.user.id,
+          linkedShipmentId: shipmentId,
+        },
+      });
     });
 
     await writeAuditLog({
@@ -50,11 +86,14 @@ export async function createInvoice(input: z.infer<typeof createInvoiceSchema>):
       action: 'CREATE',
       entityType: 'Invoice',
       entityId: invoice.id,
-      summary: `Issued ${data.type} invoice ${invoiceNumber} for order ${order.orderNumber}`,
+      summary: data.ongkir
+        ? `Issued ${data.type} invoice ${invoiceNumber} for order ${order.orderNumber}, bundled with ongkir ${data.ongkir.shippingCost}`
+        : `Issued ${data.type} invoice ${invoiceNumber} for order ${order.orderNumber}`,
     });
 
     revalidatePath(`/admin/orders/${data.orderId}`);
     revalidatePath('/admin/invoices');
+    if (invoice.linkedShipmentId) revalidatePath('/admin/shipments');
     return { success: true, invoiceId: invoice.id };
   } catch (err) {
     console.error(err);

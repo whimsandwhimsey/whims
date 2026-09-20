@@ -43,7 +43,7 @@ export default async function ShipmentsPage() {
                 <PaymentStatusBadge status={s.paymentStatus} />
               </div>
               <p className="text-xs text-muted-foreground">
-                {COURIER_LABELS[s.courier] ?? s.courier} · {s.trackingNumber} · {s.orders.length} order(s) ·{' '}
+                {COURIER_LABELS[s.courier] ?? s.courier} · {s.trackingNumber ?? 'Belum ada resi'} · {s.orders.length} order(s) ·{' '}
                 {formatDate(s.createdAt)}
               </p>
               <p className="mt-1 text-sm font-medium">

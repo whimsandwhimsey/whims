@@ -47,10 +47,12 @@ export function ShippingForm({
   orderIds,
   initialCourier,
   initialTracking,
+  initialShippingCost,
 }: {
   orderIds: string[];
   initialCourier: string | null;
   initialTracking: string | null;
+  initialShippingCost?: number;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -124,6 +126,7 @@ export function ShippingForm({
           type="number"
           min="0"
           placeholder="Ongkir (Rp)"
+          defaultValue={initialShippingCost ?? ''}
           className="sm:w-32"
           required
         />

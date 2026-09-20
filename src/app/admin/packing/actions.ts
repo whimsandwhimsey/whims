@@ -42,18 +42,41 @@ export async function createShipment(orderIds: string[], formData: FormData): Pr
     if (orders.length === 0) return { success: false, error: 'Orders not found.' };
     const customerId = orders[0].customerId;
 
-    const shipment = await prisma.shipment.create({
-      data: {
-        customerId,
-        courier: parsed.data.courier,
-        trackingNumber: parsed.data.trackingNumber,
-        shippingCost: parsed.data.shippingCost,
-        amountPaid: 0,
-        outstandingBalance: parsed.data.shippingCost,
-        paymentStatus: 'UNPAID',
-        createdById: session.user.id,
-      },
-    });
+    // If every order in this group already points at the SAME shipment
+    // (created earlier when ongkir was bundled into an invoice, resi still
+    // blank), fill that one in instead of creating a duplicate — the
+    // billing/payment history on it stays intact.
+    const existingShipmentIds = new Set(orders.map((o) => o.shipmentId).filter(Boolean));
+    const reuseShipmentId =
+      existingShipmentIds.size === 1 ? ([...existingShipmentIds][0] as string) : null;
+
+    const shipment = reuseShipmentId
+      ? await prisma.shipment.update({
+          where: { id: reuseShipmentId },
+          data: {
+            courier: parsed.data.courier,
+            trackingNumber: parsed.data.trackingNumber,
+            shippingCost: parsed.data.shippingCost,
+          },
+        })
+      : await prisma.shipment.create({
+          data: {
+            customerId,
+            courier: parsed.data.courier,
+            trackingNumber: parsed.data.trackingNumber,
+            shippingCost: parsed.data.shippingCost,
+            amountPaid: 0,
+            outstandingBalance: parsed.data.shippingCost,
+            paymentStatus: 'UNPAID',
+            createdById: session.user.id,
+          },
+        });
+
+    if (reuseShipmentId) {
+      // Cost may have changed — outstanding/paymentStatus need a proper
+      // recompute from actual payments, not a naive overwrite.
+      await recalculateShipmentFinancials(shipment.id);
+    }
 
     for (const order of orders) {
       const shouldMarkShipped = !['COMPLETED', 'CANCELLED', 'SHIPPED'].includes(order.status);
@@ -103,19 +126,24 @@ export async function recordShipmentPayment(shipmentId: string, formData: FormDa
     const shipment = await prisma.shipment.findUnique({ where: { id: shipmentId } });
     if (!shipment) return { success: false, error: 'Shipment not found.' };
 
-    await prisma.payment.create({
-      data: {
-        customerId: shipment.customerId,
-        shipmentId,
-        date: new Date(),
-        amount,
-        method,
-        notes: `Ongkir untuk resi ${shipment.trackingNumber}`,
-        recordedById: session.user.id,
-      },
-    });
+    await prisma.$transaction(async (tx) => {
+      await tx.payment.create({
+        data: {
+          customerId: shipment.customerId,
+          shipmentId,
+          date: new Date(),
+          amount,
+          method,
+          notes: `Ongkir untuk resi ${shipment.trackingNumber}`,
+          recordedById: session.user.id,
+        },
+      });
 
-    await recalculateShipmentFinancials(shipmentId);
+      // Same transaction as the Payment above — if this fails, the payment
+      // rolls back too, instead of a payment existing that the shipment's
+      // own paid/outstanding never picked up.
+      await recalculateShipmentFinancials(shipmentId, tx);
+    });
 
     await writeAuditLog({
       userId: session.user.id,

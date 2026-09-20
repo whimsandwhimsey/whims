@@ -34,7 +34,9 @@ export default async function ShipmentDetailPage({ params }: { params: { id: str
   });
   if (!shipment) notFound();
 
-  const tracking = await getTrackingStatus(shipment.trackingNumber, shipment.courier);
+  const tracking = shipment.trackingNumber
+    ? await getTrackingStatus(shipment.trackingNumber, shipment.courier)
+    : null;
 
   return (
     <div className="p-4 sm:p-6">
@@ -49,7 +51,7 @@ export default async function ShipmentDetailPage({ params }: { params: { id: str
         <div>
           <h1 className="font-display text-2xl font-semibold text-primary">{shipment.customer.name}</h1>
           <p className="text-sm text-muted-foreground">
-            {COURIER_LABELS[shipment.courier] ?? shipment.courier} · {shipment.trackingNumber}
+            {COURIER_LABELS[shipment.courier] ?? shipment.courier} · {shipment.trackingNumber ?? 'Belum ada resi'}
           </p>
         </div>
         <PaymentStatusBadge status={shipment.paymentStatus} />

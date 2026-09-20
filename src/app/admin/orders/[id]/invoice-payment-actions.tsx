@@ -8,39 +8,54 @@ import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { formatCurrency } from '@/lib/utils';
-import { recordPayment, applyDepositToInvoice } from '../../payments/actions';
+import { recordPayment, recordCombinedPayment, applyDepositToInvoice } from '../../payments/actions';
 
 export function InvoicePaymentActions({
   invoiceId,
   outstanding,
   depositBalance,
+  linkedShipmentOutstanding,
 }: {
   invoiceId: string;
   outstanding: number;
   depositBalance: number;
+  /** When this invoice has ongkir bundled in, its outstanding — the
+   * "Record payment" / "Apply deposit" actions then work against the
+   * combined total and split automatically (book first, then ongkir). */
+  linkedShipmentOutstanding?: number;
 }) {
   const router = useRouter();
   const [mode, setMode] = useState<'closed' | 'payment' | 'deposit'>('closed');
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  if (outstanding <= 0) return null;
+  const combinedOutstanding = outstanding + (linkedShipmentOutstanding ?? 0);
+  const isCombined = linkedShipmentOutstanding !== undefined && linkedShipmentOutstanding > 0;
+
+  if (combinedOutstanding <= 0) return null;
 
   function handlePaymentSubmit(formData: FormData) {
     setError(null);
+    setSuccessMessage(null);
     startTransition(async () => {
-      const result = await recordPayment(invoiceId, formData);
+      const result = isCombined
+        ? await recordCombinedPayment(invoiceId, formData)
+        : await recordPayment(invoiceId, formData);
       if (!result.success) {
         setError(result.error);
         return;
       }
       setMode('closed');
+      setSuccessMessage('Payment saved.');
       router.refresh();
     });
   }
 
   function handleDepositSubmit(formData: FormData) {
     setError(null);
+    setSuccessMessage(null);
+    const applied = Number(formData.get('amount'));
     startTransition(async () => {
       const result = await applyDepositToInvoice(invoiceId, formData);
       if (!result.success) {
@@ -48,21 +63,27 @@ export function InvoicePaymentActions({
         return;
       }
       setMode('closed');
+      setSuccessMessage(
+        `Applied ${formatCurrency(applied)} from deposit. Outstanding is now ${formatCurrency(Math.max(0, combinedOutstanding - applied))}.`
+      );
       router.refresh();
     });
   }
 
   if (mode === 'closed') {
     return (
-      <div className="flex flex-wrap gap-2">
-        <Button size="sm" onClick={() => setMode('payment')}>
-          Record payment
-        </Button>
-        {depositBalance > 0 && (
-          <Button size="sm" variant="outline" onClick={() => setMode('deposit')}>
-            Apply deposit ({formatCurrency(depositBalance)} available)
+      <div className="space-y-2">
+        {successMessage && <p className="text-sm text-success">{successMessage}</p>}
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" onClick={() => setMode('payment')}>
+            Record payment
           </Button>
-        )}
+          {depositBalance > 0 && (
+            <Button size="sm" variant="outline" onClick={() => setMode('deposit')}>
+              Apply deposit ({formatCurrency(depositBalance)} available)
+            </Button>
+          )}
+        </div>
       </div>
     );
   }
@@ -71,8 +92,8 @@ export function InvoicePaymentActions({
     return (
       <form action={handleDepositSubmit} className="space-y-3 rounded-md border border-border p-4">
         <p className="text-xs text-muted-foreground">
-          Customer has {formatCurrency(depositBalance)} in deposit. Invoice outstanding:{' '}
-          {formatCurrency(outstanding)}.
+          Customer has {formatCurrency(depositBalance)} in deposit. Outstanding
+          {isCombined ? ' (buku + ongkir)' : ''}: {formatCurrency(combinedOutstanding)}.
         </p>
         <div className="space-y-1.5">
           <Label htmlFor="depositAmount">Amount to apply</Label>
@@ -81,9 +102,9 @@ export function InvoicePaymentActions({
             name="amount"
             type="number"
             min="1"
-            max={Math.min(depositBalance, outstanding)}
+            max={Math.min(depositBalance, combinedOutstanding)}
             step="1"
-            defaultValue={Math.min(depositBalance, outstanding)}
+            defaultValue={Math.min(depositBalance, combinedOutstanding)}
             required
             autoFocus
           />
@@ -112,12 +133,13 @@ export function InvoicePaymentActions({
             type="number"
             min="0"
             step="1"
-            defaultValue={outstanding}
+            defaultValue={combinedOutstanding}
             required
             autoFocus
           />
           <p className="text-xs text-muted-foreground">
-            Outstanding: {formatCurrency(outstanding)}. Paying more automatically becomes deposit.
+            Outstanding{isCombined ? ' (buku + ongkir)' : ''}: {formatCurrency(combinedOutstanding)}.
+            {isCombined ? ' Buku dilunasin dulu, sisanya ke ongkir.' : ' Paying more automatically becomes deposit.'}
           </p>
         </div>
         <div className="space-y-1.5">

@@ -31,7 +31,10 @@ export default async function PortalShipmentsPage() {
   });
 
   const withTracking = await Promise.all(
-    shipments.map(async (s) => ({ shipment: s, tracking: await getTrackingStatus(s.trackingNumber, s.courier) }))
+    shipments.map(async (s) => ({
+      shipment: s,
+      tracking: s.trackingNumber ? await getTrackingStatus(s.trackingNumber, s.courier) : null,
+    }))
   );
 
   return (
@@ -55,7 +58,7 @@ export default async function PortalShipmentsPage() {
               <Card key={shipment.id}>
                 <CardHeader className="flex flex-row items-center justify-between">
                   <CardTitle className="text-base">
-                    {COURIER_LABELS[shipment.courier] ?? shipment.courier} · {shipment.trackingNumber}
+                    {COURIER_LABELS[shipment.courier] ?? shipment.courier} · {shipment.trackingNumber ?? 'Resi menyusul'}
                   </CardTitle>
                   <PaymentStatusBadge status={shipment.paymentStatus} />
                 </CardHeader>

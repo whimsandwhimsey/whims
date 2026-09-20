@@ -49,7 +49,7 @@ export default async function OrderDetailPage({
       customer: true,
       items: true,
       payments: { orderBy: { date: 'desc' } },
-      invoices: { orderBy: { issuedAt: 'desc' } },
+      invoices: { orderBy: { issuedAt: 'desc' }, include: { linkedShipment: true } },
       poBatch: true,
       supplier: true,
       shipment: { include: { orders: { select: { orderNumber: true } } } },
@@ -282,26 +282,39 @@ export default async function OrderDetailPage({
                         <div>
                           Amount
                           <p className="text-sm font-medium text-foreground">
-                            {formatCurrency(inv.amount.toString())}
+                            {formatCurrency(
+                              (toNumber(inv.amount) + (inv.linkedShipment ? toNumber(inv.linkedShipment.shippingCost) : 0)).toString()
+                            )}
                           </p>
                         </div>
                         <div>
                           Paid
                           <p className="text-sm font-medium text-foreground">
-                            {formatCurrency(inv.amountPaid.toString())}
+                            {formatCurrency(
+                              (toNumber(inv.amountPaid) + (inv.linkedShipment ? toNumber(inv.linkedShipment.amountPaid) : 0)).toString()
+                            )}
                           </p>
                         </div>
                         <div>
                           Outstanding
                           <p className="text-sm font-medium text-foreground">
-                            {formatCurrency(inv.outstandingBalance.toString())}
+                            {formatCurrency(
+                              (toNumber(inv.outstandingBalance) + (inv.linkedShipment ? toNumber(inv.linkedShipment.outstandingBalance) : 0)).toString()
+                            )}
                           </p>
                         </div>
                       </div>
+                      {inv.linkedShipment && (
+                        <p className="mb-3 text-xs text-muted-foreground">
+                          Termasuk ongkir {formatCurrency(inv.linkedShipment.shippingCost.toString())} (
+                          {inv.linkedShipment.courier}) — dicatat terpisah, ditagih jadi satu.
+                        </p>
+                      )}
                       <InvoicePaymentActions
                         invoiceId={inv.id}
                         outstanding={toNumber(inv.outstandingBalance)}
                         depositBalance={depositBalance}
+                        linkedShipmentOutstanding={inv.linkedShipment ? toNumber(inv.linkedShipment.outstandingBalance) : undefined}
                       />
                     </div>
                   ))}
@@ -389,7 +402,7 @@ export default async function OrderDetailPage({
               </CardHeader>
               <CardContent className="space-y-1.5 text-sm">
                 <Row label="Courier" value={order.shipment.courier} />
-                <Row label="Tracking #" value={order.shipment.trackingNumber} />
+                <Row label="Tracking #" value={order.shipment.trackingNumber ?? 'Belum ada resi'} />
                 <Row label="Ongkir" value={formatCurrency(order.shipment.shippingCost.toString())} />
                 <Row label="Ongkir outstanding" value={formatCurrency(order.shipment.outstandingBalance.toString())} />
                 {order.shipment.orders.length > 1 && (

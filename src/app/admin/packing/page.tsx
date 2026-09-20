@@ -4,6 +4,7 @@ import { Card } from '@/components/ui/card';
 import { ShippingForm } from './shipping-form';
 import { PackedCheckbox } from './packed-checkbox';
 import { PackingNoteField } from './packing-note-field';
+import { formatCurrency } from '@/lib/utils';
 
 export default async function PackingListPage() {
   const orders = await prisma.order.findMany({
@@ -16,6 +17,7 @@ export default async function PackingListPage() {
       items: { include: { book: true } },
       payments: { orderBy: { date: 'desc' }, take: 1 },
       poBatch: { select: { name: true } },
+      shipment: { select: { shippingCost: true } },
     },
   });
 
@@ -103,11 +105,20 @@ export default async function PackingListPage() {
                   Already has tracking: {anyTracking.trackingNumber}
                 </p>
               )}
+              {!anyTracking && groupOrders[0].shipment && (
+                <p className="mb-2 text-xs text-brass">
+                  Ongkir {formatCurrency(Number(groupOrders[0].shipment.shippingCost.toString()))} udah ditagih
+                  di invoice — tinggal isi resi-nya di bawah.
+                </p>
+              )}
 
               <ShippingForm
                 orderIds={orderIds}
                 initialCourier={groupOrders[0].courier}
                 initialTracking={groupOrders[0].trackingNumber}
+                initialShippingCost={
+                  groupOrders[0].shipment ? Number(groupOrders[0].shipment.shippingCost.toString()) : undefined
+                }
               />
 
               <div className="mt-2 flex flex-wrap gap-2">

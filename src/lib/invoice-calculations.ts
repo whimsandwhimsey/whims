@@ -1,6 +1,9 @@
 import { prisma } from '@/lib/prisma';
 import { toNumber, computeOutstandingBalance, computePaymentStatus, round2 } from '@/lib/calculations';
 import { recalculateDepositLedger } from '@/lib/deposit';
+import type { Prisma } from '@prisma/client';
+
+type DbClient = typeof prisma | Prisma.TransactionClient;
 
 /**
  * Recomputes ONE invoice's amountPaid / outstandingBalance / paymentStatus
@@ -16,19 +19,26 @@ import { recalculateDepositLedger } from '@/lib/deposit';
  * calls recalcOrderFromInvoices internally, so the order-level rollup
  * always stays in sync — invoices are the source of truth, order totals
  * are just a sum of them.
+ *
+ * IMPORTANT: pass the `tx` from an enclosing `prisma.$transaction(...)`
+ * that also creates/edits the Payment or DepositTransaction this call is
+ * reacting to. Running the ledger-mutating write and this recalculation as
+ * two separate top-level calls risks the first committing and the second
+ * failing — leaving a customer's deposit debited with the invoice never
+ * reflecting it (or vice versa). Always one atomic unit.
  */
-export async function recalculateInvoiceFinancials(invoiceId: string): Promise<void> {
-  const invoice = await prisma.invoice.findUnique({ where: { id: invoiceId } });
+export async function recalculateInvoiceFinancials(invoiceId: string, client: DbClient = prisma): Promise<void> {
+  const invoice = await client.invoice.findUnique({ where: { id: invoiceId } });
   if (!invoice) return;
 
-  const order = await prisma.order.findUnique({ where: { id: invoice.orderId } });
+  const order = await client.order.findUnique({ where: { id: invoice.orderId } });
   if (!order) return;
 
   const invoiceAmount = toNumber(invoice.amount);
 
   const [payments, depositUsed] = await Promise.all([
-    prisma.payment.findMany({ where: { invoiceId }, orderBy: [{ date: 'asc' }, { createdAt: 'asc' }] }),
-    prisma.depositTransaction.findMany({
+    client.payment.findMany({ where: { invoiceId }, orderBy: [{ date: 'asc' }, { createdAt: 'asc' }] }),
+    client.depositTransaction.findMany({
       where: { invoiceId, type: 'USED' },
       orderBy: [{ createdAt: 'asc' }],
     }),
@@ -71,7 +81,7 @@ export async function recalculateInvoiceFinancials(invoiceId: string): Promise<v
     // "which payment generated this top-up" since a top-up can also come
     // from a standalone deposit payment with no invoice at all).
     const marker = `payment:${event.paymentId}`;
-    const existingTopUp = await prisma.depositTransaction.findFirst({
+    const existingTopUp = await client.depositTransaction.findFirst({
       where: { type: 'TOP_UP', invoiceId: invoice.id, notes: { contains: marker } },
     });
 
@@ -79,10 +89,10 @@ export async function recalculateInvoiceFinancials(invoiceId: string): Promise<v
       touchedDepositCustomer = true;
       if (existingTopUp) {
         if (toNumber(existingTopUp.amount) !== overpay) {
-          await prisma.depositTransaction.update({ where: { id: existingTopUp.id }, data: { amount: overpay } });
+          await client.depositTransaction.update({ where: { id: existingTopUp.id }, data: { amount: overpay } });
         }
       } else {
-        await prisma.depositTransaction.create({
+        await client.depositTransaction.create({
           data: {
             customerId: order.customerId,
             type: 'TOP_UP',
@@ -96,7 +106,7 @@ export async function recalculateInvoiceFinancials(invoiceId: string): Promise<v
       }
     } else if (existingTopUp) {
       touchedDepositCustomer = true;
-      await prisma.depositTransaction.delete({ where: { id: existingTopUp.id } });
+      await client.depositTransaction.delete({ where: { id: existingTopUp.id } });
     }
   }
 
@@ -104,7 +114,7 @@ export async function recalculateInvoiceFinancials(invoiceId: string): Promise<v
   const outstandingBalance = computeOutstandingBalance(invoiceAmount, runningPaid);
   const paymentStatus = computePaymentStatus(invoiceAmount, runningPaid);
 
-  await prisma.invoice.update({
+  await client.invoice.update({
     where: { id: invoiceId },
     data: {
       amountPaid: runningPaid,
@@ -114,23 +124,25 @@ export async function recalculateInvoiceFinancials(invoiceId: string): Promise<v
     },
   });
 
-  await recalcOrderFromInvoices(invoice.orderId);
+  await recalcOrderFromInvoices(invoice.orderId, client);
 
   if (touchedDepositCustomer) {
-    await recalculateDepositLedger(order.customerId);
+    await recalculateDepositLedger(order.customerId, client);
   }
 }
 
-/** Rolls up every invoice under an order into the order's own totals. */
-export async function recalcOrderFromInvoices(orderId: string): Promise<void> {
-  const order = await prisma.order.findUnique({ where: { id: orderId } });
+/** Rolls up every invoice under an order into the order's own totals. Same
+ * atomicity note as recalculateInvoiceFinancials applies — pass `tx` when
+ * this follows a write in the same operation. */
+export async function recalcOrderFromInvoices(orderId: string, client: DbClient = prisma): Promise<void> {
+  const order = await client.order.findUnique({ where: { id: orderId } });
   if (!order) return;
 
-  const invoices = await prisma.invoice.findMany({ where: { orderId } });
+  const invoices = await client.invoice.findMany({ where: { orderId } });
   const amountPaid = round2(invoices.reduce((sum, inv) => sum + toNumber(inv.amountPaid), 0));
   const totalAmount = toNumber(order.totalAmount);
 
-  await prisma.order.update({
+  await client.order.update({
     where: { id: orderId },
     data: {
       amountPaid,

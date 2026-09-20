@@ -9,6 +9,10 @@ export type InvoiceDocumentData = {
    * invoice, so the customer can see the DP already paid alongside the
    * pelunasan amount. */
   depositPaidAmount?: number;
+  /** Ongkir bundled into this same bill — the customer sees ONE combined
+   * total (amount + ongkir.cost), even though it's tracked separately
+   * underneath as its own Shipment. */
+  ongkir?: { courier: string; cost: number; outstanding: number };
   order: {
     orderNumber: string;
     orderDate: Date | string;
@@ -117,14 +121,24 @@ export function InvoiceDocument({ data, id }: { data: InvoiceDocumentData; id?: 
           <Row label="DP sudah dibayar" value={formatCurrency(data.depositPaidAmount)} />
         )}
         <div className="my-2 border-t border-border" />
-        <Row label={`This invoice (${TYPE_LABELS[data.type]})`} value={formatCurrency(data.amount)} bold />
+        {data.ongkir ? (
+          <>
+            <Row label={`Buku (${TYPE_LABELS[data.type]})`} value={formatCurrency(data.amount)} />
+            <Row label={`Ongkir (${data.ongkir.courier})`} value={formatCurrency(data.ongkir.cost)} />
+            <Row label="Total tagihan ini" value={formatCurrency(data.amount + data.ongkir.cost)} bold />
+          </>
+        ) : (
+          <Row label={`This invoice (${TYPE_LABELS[data.type]})`} value={formatCurrency(data.amount)} bold />
+        )}
       </div>
 
       <div className="mb-6 flex items-center justify-center gap-3 rounded-md border border-border p-3">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/qris.png" alt="QRIS" className="h-20 w-20 shrink-0" />
         <div>
-          <p className="text-sm font-medium">Scan buat bayar {formatCurrency(data.amount)}</p>
+          <p className="text-sm font-medium">
+            Scan buat bayar {formatCurrency(data.amount + (data.ongkir?.cost ?? 0))}
+          </p>
           <p className="text-xs text-muted-foreground">QRIS — semua e-wallet &amp; mobile banking</p>
         </div>
       </div>

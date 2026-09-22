@@ -21,6 +21,7 @@ const COURIER_LABELS: Record<string, string> = {
   WAHANA: 'Wahana',
   NINJA: 'Ninja Xpress',
   IDEXPRESS: 'ID Express',
+  SENTRAL: 'Sentral Cargo',
 };
 
 export default async function ShipmentDetailPage({ params }: { params: { id: string } }) {

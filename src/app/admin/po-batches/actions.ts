@@ -7,8 +7,96 @@ import { prisma } from '@/lib/prisma';
 import { requireStaffSession } from '@/lib/guards';
 import { writeAuditLog } from '@/lib/audit';
 import { generateInvoiceNumber } from '@/lib/invoice-number';
-import { toNumber } from '@/lib/calculations';
+import { toNumber, computeOrderTotals } from '@/lib/calculations';
 import { computeDpAmount } from '@/lib/invoice-calculations';
+
+/** Saves the uploaded supplier invoice's URL against the batch — the file
+ * itself already landed in Blob storage before this is called. */
+export async function setSupplierInvoiceUrl(batchId: string, url: string) {
+  await requireStaffSession();
+  await prisma.purchaseBatch.update({
+    where: { id: batchId },
+    data: { supplierInvoiceUrl: url, supplierInvoiceUploadedAt: new Date() },
+  });
+  revalidatePath(`/admin/po-batches/${batchId}`);
+}
+
+export async function removeSupplierInvoice(batchId: string) {
+  await requireStaffSession();
+  await prisma.purchaseBatch.update({
+    where: { id: batchId },
+    data: { supplierInvoiceUrl: null, supplierInvoiceUploadedAt: null },
+  });
+  revalidatePath(`/admin/po-batches/${batchId}`);
+}
+
+export async function updateWarehouseShippingCost(batchId: string, amount: number) {
+  await requireStaffSession();
+  await prisma.purchaseBatch.update({
+    where: { id: batchId },
+    data: { warehouseShippingCost: amount },
+  });
+  revalidatePath(`/admin/po-batches/${batchId}`);
+}
+
+/**
+ * Sets COGS for one book across every order in this batch that has it —
+ * matched by ISBN when the item has one, falling back to exact title
+ * match otherwise (mirrors how the batch's own "Ringkasan Buku" groups
+ * items). Every affected order's totalCogs/profit is recomputed; nothing
+ * customer-facing (subtotal, total, payment status) ever changes from a
+ * COGS edit — COGS is purely for margin tracking.
+ */
+export async function updateBookCogsForBatch(
+  batchId: string,
+  bookKey: { isbn: string | null; bookTitle: string },
+  cogs: number
+): Promise<{ success: true; updatedCount: number } | { success: false; error: string }> {
+  await requireStaffSession();
+  if (cogs < 0) return { success: false, error: 'COGS cannot be negative.' };
+
+  try {
+    const orders = await prisma.order.findMany({
+      where: { poBatchId: batchId },
+      include: { items: true },
+    });
+
+    let updatedCount = 0;
+    for (const order of orders) {
+      const matchingItemIds = order.items
+        .filter((it) => (bookKey.isbn ? it.isbn === bookKey.isbn : it.bookTitle === bookKey.bookTitle))
+        .map((it) => it.id);
+      if (matchingItemIds.length === 0) continue;
+
+      await prisma.orderItem.updateMany({
+        where: { id: { in: matchingItemIds } },
+        data: { cogs },
+      });
+      updatedCount += matchingItemIds.length;
+
+      const freshItems = await prisma.orderItem.findMany({ where: { orderId: order.id } });
+      const countedItems = freshItems.filter((it) => !(it.isOos && it.oosResolution));
+      const totals = computeOrderTotals(
+        countedItems.map((it) => ({
+          sellingPrice: toNumber(it.sellingPrice),
+          quantity: it.quantity,
+          discount: toNumber(it.discount),
+          cogs: toNumber(it.cogs),
+        }))
+      );
+      await prisma.order.update({
+        where: { id: order.id },
+        data: { totalCogs: totals.totalCogs, profit: totals.profit },
+      });
+    }
+
+    revalidatePath(`/admin/po-batches/${batchId}`);
+    return { success: true, updatedCount };
+  } catch (err) {
+    console.error(err);
+    return { success: false, error: 'Failed to update COGS.' };
+  }
+}
 
 const batchSchema = z.object({
   name: z.string().min(1, 'Name is required').max(200),

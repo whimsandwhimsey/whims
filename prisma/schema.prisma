@@ -41,6 +41,7 @@ enum Courier {
   WAHANA
   NINJA
   IDEXPRESS
+  SENTRAL
 }
 
 enum ExpenseCategory {
@@ -87,6 +88,7 @@ enum DpType {
 enum OosResolution {
   REFUND    // money physically returned to customer — logged, not a deposit ledger entry
   DEPOSIT   // amount added to the customer's deposit balance
+  CANCELLED // item voided out of the order total entirely — no money moved either way
 }
 
 enum PaymentMethod {
@@ -264,6 +266,16 @@ model PurchaseBatch {
   // instead of being re-entered per order.
   dpType              DpType?
   dpValue             Decimal?    @db.Decimal(12, 2)
+
+  // Supplier invoice, uploaded for cross-checking the books we actually
+  // ordered against what the supplier billed, and for reading off COGS
+  // (their post-discount price) per title while filling in Book.weightGrams
+  // isn't relevant here — this is purely a reference document + a place to
+  // record the shipping cost the supplier charged to get stock to our
+  // warehouse (separate from what we charge customers for local delivery).
+  supplierInvoiceUrl        String?
+  supplierInvoiceUploadedAt DateTime?
+  warehouseShippingCost     Decimal?    @db.Decimal(12, 2)
 
   orders              Order[]
 

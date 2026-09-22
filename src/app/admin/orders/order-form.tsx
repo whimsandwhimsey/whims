@@ -41,6 +41,7 @@ type OpenBatch = {
   supplierId: string | null;
   dpType: string | null;
   dpValue: unknown;
+  isOpen: boolean;
 };
 
 type ItemRow = {
@@ -260,10 +261,23 @@ export function OrderForm({
   const batchOptions = useMemo(
     () =>
       openBatches
-        .filter((b) => b.type === orderType)
+        .filter((b) => b.type === orderType && b.isOpen)
         .map((b) => ({
           value: b.id,
           label: b.name,
+          sublabel: [b.poMonth, b.etaMonth ? `ETA ${b.etaMonth}` : null].filter(Boolean).join(' · '),
+        })),
+    [openBatches, orderType]
+  );
+  // Closed batches don't clutter the default dropdown, but stay findable
+  // by name if someone really needs to add an order to one that's closed.
+  const closedBatchOptions = useMemo(
+    () =>
+      openBatches
+        .filter((b) => b.type === orderType && !b.isOpen)
+        .map((b) => ({
+          value: b.id,
+          label: `${b.name} (Closed)`,
           sublabel: [b.poMonth, b.etaMonth ? `ETA ${b.etaMonth}` : null].filter(Boolean).join(' · '),
         })),
     [openBatches, orderType]
@@ -522,6 +536,7 @@ export function OrderForm({
                 <SearchableSelect
                   id="existingBatchId"
                   options={batchOptions}
+                  secondaryOptions={closedBatchOptions}
                   value={existingBatchId}
                   onChange={handleBatchSelect}
                   placeholder="Pilih PO batch yang masih open…"
@@ -631,11 +646,13 @@ export function OrderForm({
               onChange={(e) => setStatus(e.target.value)}
               className={errClass('status')}
             >
-              {orderStatusValues.map((s) => (
-                <option key={s} value={s}>
-                  {STATUS_LABELS[s]}
-                </option>
-              ))}
+              {orderStatusValues
+                .filter((s) => s !== 'COMPLETED' || order?.status === 'COMPLETED')
+                .map((s) => (
+                  <option key={s} value={s}>
+                    {STATUS_LABELS[s]}
+                  </option>
+                ))}
             </Select>
             {fieldError('status') && <p className="text-xs text-destructive">{fieldError('status')}</p>}
           </div>

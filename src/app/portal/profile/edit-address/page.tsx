@@ -1,5 +1,4 @@
-import Link from 'next/link';
-import { ArrowLeft } from 'lucide-react';
+import { BackButton } from '@/components/back-button';
 import { prisma } from '@/lib/prisma';
 import { getAuthSession } from '@/lib/session';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -28,12 +27,9 @@ export default async function EditAddressPage({
     <main className="min-h-screen bg-background p-4 sm:p-6">
       <div className="mx-auto max-w-sm">
         {!searchParams.required && (
-          <Link
-            href="/portal/dashboard"
-            className="mb-4 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-          >
-            <ArrowLeft className="h-4 w-4" /> Back to your orders
-          </Link>
+          <div className="mb-4">
+            <BackButton label="Back to your orders" />
+          </div>
         )}
 
         <Card>

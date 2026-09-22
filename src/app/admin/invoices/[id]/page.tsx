@@ -49,6 +49,7 @@ export default async function AdminInvoiceDetailPage({ params }: { params: { id:
         quantity: i.quantity,
         sellingPrice: toNumber(i.sellingPrice),
         subtotal: toNumber(i.subtotal),
+        isOos: i.isOos,
       })),
     },
     customer: {

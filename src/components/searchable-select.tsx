@@ -8,6 +8,7 @@ export type ComboboxOption = { value: string; label: string; sublabel?: string }
 
 export function SearchableSelect({
   options,
+  secondaryOptions = [],
   value,
   onChange,
   placeholder = 'Select…',
@@ -16,6 +17,10 @@ export function SearchableSelect({
   id,
 }: {
   options: ComboboxOption[];
+  /** Only shown once the person actually types a search query — e.g.
+   * closed PO batches, kept out of the default browsable list but still
+   * findable by name if someone really needs to pick one. */
+  secondaryOptions?: ComboboxOption[];
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
@@ -28,12 +33,12 @@ export function SearchableSelect({
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const selected = options.find((o) => o.value === value);
+  const selected = options.find((o) => o.value === value) ?? secondaryOptions.find((o) => o.value === value);
 
   const filtered =
     query.trim() === ''
       ? options
-      : options.filter(
+      : [...options, ...secondaryOptions].filter(
           (o) =>
             o.label.toLowerCase().includes(query.toLowerCase()) ||
             o.sublabel?.toLowerCase().includes(query.toLowerCase())

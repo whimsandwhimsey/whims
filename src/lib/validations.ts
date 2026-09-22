@@ -79,6 +79,7 @@ export const courierValues = [
   'WAHANA',
   'NINJA',
   'IDEXPRESS',
+  'SENTRAL',
 ] as const;
 
 export const orderTypeValues = ['READY_STOCK', 'EVENT_JASTIP', 'PO_REGULAR', 'PO_REMAINDER'] as const;

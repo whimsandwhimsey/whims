@@ -1,5 +1,4 @@
-import Link from 'next/link';
-import { ArrowLeft } from 'lucide-react';
+import { BackButton } from '@/components/back-button';
 import { prisma } from '@/lib/prisma';
 import { getAuthSession } from '@/lib/session';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -75,12 +74,9 @@ export default async function PortalPreOrdersPage() {
   return (
     <main className="min-h-screen bg-background p-4 sm:p-6">
       <div className="mx-auto max-w-2xl">
-        <Link
-          href="/portal/dashboard"
-          className="mb-4 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft className="h-4 w-4" /> Back to your orders
-        </Link>
+        <div className="mb-4">
+          <BackButton label="Back to your orders" />
+        </div>
 
         <h1 className="mb-1 font-display text-2xl font-semibold text-primary">Your pre-orders</h1>
         <p className="mb-6 text-sm text-muted-foreground">

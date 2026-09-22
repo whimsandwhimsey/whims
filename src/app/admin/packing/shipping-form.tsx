@@ -20,6 +20,7 @@ const COURIER_LABELS: Record<string, string> = {
   WAHANA: 'Wahana',
   NINJA: 'Ninja Xpress',
   IDEXPRESS: 'ID Express',
+  SENTRAL: 'Sentral Cargo',
 };
 
 // Maps Biteship's lowercase courier_code back to our enum.

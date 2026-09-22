@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft } from 'lucide-react';
+import { BackButton } from '@/components/back-button';
 import { prisma } from '@/lib/prisma';
 import { getAuthSession } from '@/lib/session';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -28,6 +28,7 @@ const COURIER_LABELS: Record<string, string> = {
   WAHANA: 'Wahana',
   NINJA: 'Ninja Xpress',
   IDEXPRESS: 'ID Express',
+  SENTRAL: 'Sentral Cargo',
 };
 
 export default async function PortalOrderDetailPage({ params }: { params: { id: string } }) {
@@ -52,12 +53,9 @@ export default async function PortalOrderDetailPage({ params }: { params: { id: 
   return (
     <main className="min-h-screen bg-background p-4 sm:p-6">
       <div className="mx-auto max-w-3xl">
-        <Link
-          href="/portal/dashboard"
-          className="mb-4 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft className="h-4 w-4" /> Back to your orders
-        </Link>
+        <div className="mb-4">
+          <BackButton label="Back to your orders" />
+        </div>
 
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <div>

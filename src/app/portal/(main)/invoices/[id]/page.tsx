@@ -51,6 +51,7 @@ export default async function PortalInvoiceDetailPage({ params }: { params: { id
         quantity: i.quantity,
         sellingPrice: toNumber(i.sellingPrice),
         subtotal: toNumber(i.subtotal),
+        isOos: i.isOos,
       })),
     },
     customer: {

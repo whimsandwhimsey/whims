@@ -21,13 +21,13 @@ export function OosItemActions({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [resolving, setResolving] = useState(false);
-  const [choice, setChoice] = useState<'REFUND' | 'DEPOSIT'>('DEPOSIT');
+  const [choice, setChoice] = useState<'REFUND' | 'DEPOSIT' | 'CANCELLED'>('DEPOSIT');
   const [notes, setNotes] = useState('');
 
   if (isResolved) {
     return (
       <span className="text-xs text-muted-foreground">
-        OOS · {resolution === 'DEPOSIT' ? 'Jadi deposit' : 'Refund'}
+        OOS · {resolution === 'DEPOSIT' ? 'Jadi deposit' : resolution === 'CANCELLED' ? 'Cancelled' : 'Refund'}
       </span>
     );
   }
@@ -80,9 +80,10 @@ export function OosItemActions({
 
   return (
     <div className="flex flex-col gap-2 rounded-md border border-amber-200 bg-amber-50 p-2">
-      <Select value={choice} onChange={(e) => setChoice(e.target.value as 'REFUND' | 'DEPOSIT')} className="h-8 text-xs">
+      <Select value={choice} onChange={(e) => setChoice(e.target.value as 'REFUND' | 'DEPOSIT' | 'CANCELLED')} className="h-8 text-xs">
         <option value="DEPOSIT">Jadi deposit customer</option>
         <option value="REFUND">Refund (uang keluar, dicatat)</option>
+        <option value="CANCELLED">Cancel (gak ada uang gerak)</option>
       </Select>
       <Input
         placeholder="Catatan (opsional)"

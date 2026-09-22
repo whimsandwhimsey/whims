@@ -12,6 +12,9 @@ import { ImportCustomersForm } from './import-customers-form';
 import { DepositTopUpForm } from './deposit-topup-form';
 import { ApproveCustomerButton } from './approve-customer-button';
 import { deleteCustomer, rejectCustomer } from './actions';
+import { getCustomerDepositBalance } from '@/lib/deposit';
+import { toNumber } from '@/lib/calculations';
+import { formatCurrency } from '@/lib/utils';
 
 const PAGE_SIZE = 15;
 
@@ -75,6 +78,20 @@ export default async function CustomersPage({
   ]);
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  const customerIds = customers.map((c) => c.id);
+  const [outstandingSums, depositBalances] = await Promise.all([
+    prisma.order.groupBy({
+      by: ['customerId'],
+      where: { customerId: { in: customerIds } },
+      _sum: { outstandingBalance: true },
+    }),
+    Promise.all(customerIds.map((id) => getCustomerDepositBalance(id))),
+  ]);
+  const outstandingByCustomer = new Map(
+    outstandingSums.map((row) => [row.customerId, toNumber(row._sum.outstandingBalance ?? 0)])
+  );
+  const depositByCustomer = new Map(customerIds.map((id, i) => [id, depositBalances[i]]));
 
   return (
     <div className="p-6">
@@ -144,6 +161,18 @@ export default async function CustomersPage({
               </div>
               {c.address && <p className="mb-2 text-xs text-muted-foreground">{c.address}</p>}
               <p className="mb-2 text-xs text-muted-foreground">{c._count.orders} order(s)</p>
+              <div className="mb-2 flex gap-4 text-xs">
+                <span>
+                  Outstanding:{' '}
+                  <span className="font-medium text-destructive">
+                    {formatCurrency(outstandingByCustomer.get(c.id) ?? 0)}
+                  </span>
+                </span>
+                <span>
+                  Deposit:{' '}
+                  <span className="font-medium">{formatCurrency(depositByCustomer.get(c.id) ?? 0)}</span>
+                </span>
+              </div>
               <div className="flex flex-wrap items-center gap-1">
                 {c.status === 'PENDING' && (
                   <>
@@ -183,6 +212,8 @@ export default async function CustomersPage({
                 <th className="px-4 py-3 font-medium">Address</th>
                 <th className="px-4 py-3 font-medium">Status</th>
                 <th className="px-4 py-3 font-medium">Orders</th>
+                <th className="px-4 py-3 font-medium">Outstanding</th>
+                <th className="px-4 py-3 font-medium">Deposit</th>
                 <th className="px-4 py-3 font-medium"></th>
               </tr>
             </thead>
@@ -206,6 +237,10 @@ export default async function CustomersPage({
                     </span>
                   </td>
                   <td className="px-4 py-3">{c._count.orders}</td>
+                  <td className="px-4 py-3 font-medium text-destructive">
+                    {formatCurrency(outstandingByCustomer.get(c.id) ?? 0)}
+                  </td>
+                  <td className="px-4 py-3 font-medium">{formatCurrency(depositByCustomer.get(c.id) ?? 0)}</td>
                   <td className="px-4 py-3">
                     <div className="flex flex-wrap items-center justify-end gap-1">
                       {c.status === 'PENDING' && (
@@ -238,7 +273,7 @@ export default async function CustomersPage({
               ))}
               {customers.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-10 text-center text-muted-foreground">
+                  <td colSpan={8} className="px-4 py-10 text-center text-muted-foreground">
                     No customers found.
                   </td>
                 </tr>

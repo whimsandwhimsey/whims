@@ -28,8 +28,8 @@ const PAYMENT_STATUS_LABELS: Record<string, string> = {
   PARTIAL: 'Partial',
   PAID: 'Paid',
   OVERPAID: 'Overpaid',
+  VOIDED: 'OOS / Cancelled',
 };
-
 export default async function OrdersPage({
   searchParams,
 }: {
@@ -71,11 +71,29 @@ export default async function OrdersPage({
   if (statuses.length > 0) {
     where.status = { in: statuses };
   } else if (tab === 'past') {
-    where.status = 'COMPLETED';
+    where.status = { in: ['SHIPPED', 'COMPLETED'] };
   } else {
-    where.status = { not: 'COMPLETED' };
+    where.status = { notIn: ['SHIPPED', 'COMPLETED'] };
   }
-  if (paymentStatuses.length > 0) where.paymentStatus = { in: paymentStatuses };
+  const andConditions: Record<string, unknown>[] = [];
+  if (paymentStatuses.length > 0) {
+    const realStatuses = paymentStatuses.filter((s) => s !== 'VOIDED');
+    const wantsVoided = paymentStatuses.includes('VOIDED');
+    const orParts: Record<string, unknown>[] = [];
+    if (realStatuses.length > 0) {
+      // An order with nothing left to pay (every item OOS/cancelled) is
+      // never really "Unpaid" even though that's what's stored — voided
+      // orders get their own bucket instead of muddying this one.
+      orParts.push(
+        realStatuses.includes('UNPAID')
+          ? { paymentStatus: { in: realStatuses }, totalAmount: { gt: 0 } }
+          : { paymentStatus: { in: realStatuses } }
+      );
+    }
+    if (wantsVoided) orParts.push({ totalAmount: { lte: 0 } });
+    if (orParts.length === 1) andConditions.push(orParts[0]);
+    else if (orParts.length > 1) andConditions.push({ OR: orParts });
+  }
   if (batchIds.length > 0) where.poBatchId = { in: batchIds };
   if (orderTypes.length > 0) where.orderType = { in: orderTypes };
   if (supplierIds.length > 0) where.supplierId = { in: supplierIds };
@@ -85,14 +103,17 @@ export default async function OrdersPage({
     where.items = { some: { book: { publisherId: { in: publisherIds } } } };
   }
   if (q) {
-    where.OR = [
-      { orderNumber: { contains: q, mode: 'insensitive' } },
-      { customer: { name: { contains: q, mode: 'insensitive' } } },
-      { customer: { phone: { contains: q } } },
-      { items: { some: { bookTitle: { contains: q, mode: 'insensitive' } } } },
-      { items: { some: { isbn: { contains: q } } } },
-    ];
+    andConditions.push({
+      OR: [
+        { orderNumber: { contains: q, mode: 'insensitive' } },
+        { customer: { name: { contains: q, mode: 'insensitive' } } },
+        { customer: { phone: { contains: q } } },
+        { items: { some: { bookTitle: { contains: q, mode: 'insensitive' } } } },
+        { items: { some: { isbn: { contains: q } } } },
+      ],
+    });
   }
+  if (andConditions.length > 0) where.AND = andConditions;
 
   const [orders, total, poBatches, suppliers, publishers, poMonthRows, etaMonthRows] = await Promise.all([
     prisma.order.findMany({

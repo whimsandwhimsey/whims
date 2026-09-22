@@ -15,6 +15,7 @@ const COURIER_LABELS: Record<string, string> = {
   WAHANA: 'Wahana',
   NINJA: 'Ninja Xpress',
   IDEXPRESS: 'ID Express',
+  SENTRAL: 'Sentral Cargo',
 };
 
 function toNumberSafe(v: unknown): number {

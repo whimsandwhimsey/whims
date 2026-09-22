@@ -19,7 +19,7 @@ export type InvoiceDocumentData = {
     totalAmount: number;
     amountPaid: number;
     outstandingBalance: number;
-    items: { bookTitle: string; quantity: number; sellingPrice: number; subtotal: number }[];
+    items: { bookTitle: string; quantity: number; sellingPrice: number; subtotal: number; isOos?: boolean }[];
   };
   customer: {
     name: string;
@@ -107,9 +107,14 @@ export function InvoiceDocument({ data, id }: { data: InvoiceDocumentData; id?: 
         <tbody>
           {data.order.items.map((item, i) => (
             <tr key={i} className="border-b border-border/60 align-top">
-              <td className="break-words py-2 pr-2">{item.bookTitle}</td>
-              <td className="whitespace-nowrap py-2 text-right">{item.quantity}</td>
-              <td className="whitespace-nowrap py-2 text-right">{formatCurrency(item.subtotal)}</td>
+              <td className="break-words py-2 pr-2">
+                {item.bookTitle}
+                {item.isOos && <span className="ml-1.5 text-xs text-muted-foreground">(OOS)</span>}
+              </td>
+              <td className="whitespace-nowrap py-2 text-right">{item.isOos ? '—' : item.quantity}</td>
+              <td className="whitespace-nowrap py-2 text-right">
+                {item.isOos ? 'OOS' : formatCurrency(item.subtotal)}
+              </td>
             </tr>
           ))}
         </tbody>

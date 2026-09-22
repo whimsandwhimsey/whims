@@ -42,11 +42,13 @@ export function StatusChanger({ orderId, current }: { orderId: string; current: 
       onChange={(e) => handleChange(e.target.value)}
       className="w-48"
     >
-      {orderStatusValues.map((s) => (
-        <option key={s} value={s}>
-          {STATUS_LABELS[s]}
-        </option>
-      ))}
+      {orderStatusValues
+        .filter((s) => s !== 'COMPLETED' || current === 'COMPLETED')
+        .map((s) => (
+          <option key={s} value={s}>
+            {STATUS_LABELS[s]}
+          </option>
+        ))}
     </Select>
   );
 }

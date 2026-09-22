@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft, Pencil, Plus } from 'lucide-react';
+import { Pencil, Plus } from 'lucide-react';
+import { BackButton } from '@/components/back-button';
 import { prisma } from '@/lib/prisma';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -57,7 +58,14 @@ export default async function PoBatchDetailPage({
 
   const bookSummary = new Map<
     string,
-    { title: string; quantity: number; subtotal: number; buyers: { name: string; phoneLast4: string }[] }
+    {
+      title: string;
+      isbn: string | null;
+      quantity: number;
+      subtotal: number;
+      cogs: number;
+      buyers: { name: string; phoneLast4: string }[];
+    }
   >();
   for (const o of batch.orders) {
     for (const it of o.items) {
@@ -70,7 +78,14 @@ export default async function PoBatchDetailPage({
         existing.subtotal += subtotal;
         existing.buyers.push(buyer);
       } else {
-        bookSummary.set(key, { title: it.bookTitle, quantity: it.quantity, subtotal, buyers: [buyer] });
+        bookSummary.set(key, {
+          title: it.bookTitle,
+          isbn: it.isbn,
+          quantity: it.quantity,
+          subtotal,
+          cogs: Number(it.cogs.toString()),
+          buyers: [buyer],
+        });
       }
     }
   }
@@ -99,12 +114,7 @@ export default async function PoBatchDetailPage({
   return (
     <div className="p-4 sm:p-6">
       <div className="mb-4 flex items-center justify-between">
-        <Link
-          href="/admin/po-batches"
-          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft className="h-4 w-4" /> Back to PO batches
-        </Link>
+        <BackButton label="Back to PO batches" />
         <div className="flex flex-wrap gap-2">
           {batch.isOpen && (
             <Button size="sm" asChild>

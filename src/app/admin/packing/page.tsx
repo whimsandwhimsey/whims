@@ -5,8 +5,10 @@ import { ShippingForm } from './shipping-form';
 import { PackedCheckbox } from './packed-checkbox';
 import { PackingNoteField } from './packing-note-field';
 import { formatCurrency } from '@/lib/utils';
+import { SearchBox } from '@/components/search-box';
 
-export default async function PackingListPage() {
+export default async function PackingListPage({ searchParams }: { searchParams: { q?: string } }) {
+  const q = searchParams.q?.trim().toLowerCase() ?? '';
   const orders = await prisma.order.findMany({
     where: {
       status: { in: ['ARRIVED'] },
@@ -42,7 +44,15 @@ export default async function PackingListPage() {
   }
 
   // Sort by whichever group got fully paid first — first paid, first packed.
-  const sorted = [...groups.values()].sort((a, b) => a.paidDate.getTime() - b.paidDate.getTime());
+  let sorted = [...groups.values()].sort((a, b) => a.paidDate.getTime() - b.paidDate.getTime());
+
+  if (q) {
+    sorted = sorted.filter(
+      (g) =>
+        g.customer.name.toLowerCase().includes(q) ||
+        g.orders.some((o) => o.items.some((it) => it.bookTitle.toLowerCase().includes(q)))
+    );
+  }
 
   return (
     <div className="p-4 sm:p-6">
@@ -52,6 +62,10 @@ export default async function PackingListPage() {
           {sorted.length} customer(s) ready to pack — fully paid and arrived at the warehouse, in
           the order they got paid off. Work top to bottom so nothing gets skipped.
         </p>
+      </div>
+
+      <div className="mb-4">
+        <SearchBox placeholder="Cari nama customer atau judul buku…" />
       </div>
 
       <div className="space-y-3">

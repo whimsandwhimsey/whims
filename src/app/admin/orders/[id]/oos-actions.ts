@@ -72,7 +72,7 @@ export async function unmarkItemOos(orderItemId: string): Promise<ActionResult> 
  */
 export async function resolveItemOos(
   orderItemId: string,
-  resolution: 'REFUND' | 'DEPOSIT',
+  resolution: 'REFUND' | 'DEPOSIT' | 'CANCELLED',
   notes?: string
 ): Promise<ActionResult> {
   const session = await requireStaffSession();

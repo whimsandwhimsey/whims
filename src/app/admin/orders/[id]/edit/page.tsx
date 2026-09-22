@@ -18,12 +18,19 @@ export default async function EditOrderPage({ params }: { params: { id: string }
     }),
     prisma.supplier.findMany({ where: { isActive: true }, orderBy: { name: 'asc' }, select: { id: true, name: true } }),
     prisma.purchaseBatch.findMany({
-      where: {
-        isOpen: true,
-        type: { in: ['PO_REGULAR', 'PO_REMAINDER'] },
-      },
+      where: { type: { in: ['PO_REGULAR', 'PO_REMAINDER'] } },
       orderBy: { createdAt: 'desc' },
-      select: { id: true, name: true, type: true, poMonth: true, etaMonth: true, supplierId: true, dpType: true, dpValue: true },
+      select: {
+        id: true,
+        name: true,
+        type: true,
+        poMonth: true,
+        etaMonth: true,
+        supplierId: true,
+        dpType: true,
+        dpValue: true,
+        isOpen: true,
+      },
     }),
   ]);
 

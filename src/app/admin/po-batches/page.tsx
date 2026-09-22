@@ -29,11 +29,6 @@ const INVOICE_STATUS_LABELS: Record<string, string> = {
   sent: 'Invoice terkirim',
 };
 
-const OPEN_STATUS_LABELS: Record<string, string> = {
-  open: 'Open',
-  closed: 'Closed',
-};
-
 export default async function PoBatchesPage({
   searchParams,
 }: {
@@ -43,7 +38,7 @@ export default async function PoBatchesPage({
     paymentStatus?: string;
     invoiceStatus?: string;
     supplier?: string;
-    openStatus?: string;
+    tab?: string;
   };
 }) {
   const q = searchParams.q?.trim().toLowerCase() ?? '';
@@ -53,7 +48,7 @@ export default async function PoBatchesPage({
   const paymentStatuses = (searchParams.paymentStatus ?? '').split(',').filter(Boolean);
   const invoiceStatuses = (searchParams.invoiceStatus ?? '').split(',').filter(Boolean);
   const supplierIds = (searchParams.supplier ?? '').split(',').filter(Boolean);
-  const openStatuses = (searchParams.openStatus ?? '').split(',').filter(Boolean);
+  const tab = searchParams.tab === 'closed' ? 'closed' : 'open';
 
   const [allBatches, suppliers] = await Promise.all([
     prisma.purchaseBatch.findMany({
@@ -77,7 +72,7 @@ export default async function PoBatchesPage({
     return set;
   }
 
-  let batches = allBatches;
+  let batches = allBatches.filter((b) => (tab === 'open' ? b.isOpen : !b.isOpen));
   if (q) {
     batches = batches.filter(
       (b) => b.name.toLowerCase().includes(q) || (b.supplier?.name ?? '').toLowerCase().includes(q)
@@ -94,9 +89,6 @@ export default async function PoBatchesPage({
   }
   if (supplierIds.length > 0) {
     batches = batches.filter((b) => b.supplierId && supplierIds.includes(b.supplierId));
-  }
-  if (openStatuses.length > 0) {
-    batches = batches.filter((b) => openStatuses.includes(b.isOpen ? 'open' : 'closed'));
   }
 
   batches = [...batches].sort((a, b) => {
@@ -121,17 +113,46 @@ export default async function PoBatchesPage({
         </Button>
       </div>
 
+      <div className="mb-4 flex gap-1 rounded-md bg-secondary p-1 sm:inline-flex">
+        <Link
+          href={(() => {
+            const p = new URLSearchParams();
+            if (q) p.set('q', q);
+            if (paymentStatuses.length) p.set('paymentStatus', paymentStatuses.join(','));
+            if (invoiceStatuses.length) p.set('invoiceStatus', invoiceStatuses.join(','));
+            if (supplierIds.length) p.set('supplier', supplierIds.join(','));
+            return `/admin/po-batches?${p.toString()}`;
+          })()}
+          className={`flex-1 rounded px-3 py-1.5 text-center text-sm font-medium sm:flex-none ${
+            tab === 'open' ? 'bg-card shadow-sm' : 'text-muted-foreground'
+          }`}
+        >
+          Open
+        </Link>
+        <Link
+          href={(() => {
+            const p = new URLSearchParams();
+            p.set('tab', 'closed');
+            if (q) p.set('q', q);
+            if (paymentStatuses.length) p.set('paymentStatus', paymentStatuses.join(','));
+            if (invoiceStatuses.length) p.set('invoiceStatus', invoiceStatuses.join(','));
+            if (supplierIds.length) p.set('supplier', supplierIds.join(','));
+            return `/admin/po-batches?${p.toString()}`;
+          })()}
+          className={`flex-1 rounded px-3 py-1.5 text-center text-sm font-medium sm:flex-none ${
+            tab === 'closed' ? 'bg-card shadow-sm' : 'text-muted-foreground'
+          }`}
+        >
+          Closed
+        </Link>
+      </div>
+
       <div className="mb-4 flex flex-wrap gap-3">
         <SearchBox placeholder="Cari nama batch atau supplier…" />
         <MultiSelectFilter
           paramKey="supplier"
           label="Supplier"
           options={suppliers.map((s) => ({ value: s.id, label: s.name }))}
-        />
-        <MultiSelectFilter
-          paramKey="openStatus"
-          label="Status"
-          options={Object.entries(OPEN_STATUS_LABELS).map(([value, label]) => ({ value, label }))}
         />
         <MultiSelectFilter
           paramKey="paymentStatus"

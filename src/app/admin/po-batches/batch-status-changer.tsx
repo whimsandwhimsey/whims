@@ -36,11 +36,13 @@ export function BatchStatusChanger({ poBatchId, orderCount }: { poBatchId: strin
       <option value="" disabled>
         Update status semua order…
       </option>
-      {orderStatusValues.map((s) => (
-        <option key={s} value={s}>
-          {STATUS_LABELS[s]}
-        </option>
-      ))}
+      {orderStatusValues
+        .filter((s) => s !== 'COMPLETED')
+        .map((s) => (
+          <option key={s} value={s}>
+            {STATUS_LABELS[s]}
+          </option>
+        ))}
     </Select>
   );
 }

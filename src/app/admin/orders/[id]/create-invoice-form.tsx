@@ -26,6 +26,7 @@ const COURIER_LABELS: Record<string, string> = {
   WAHANA: 'Wahana',
   NINJA: 'Ninja Xpress',
   IDEXPRESS: 'ID Express',
+  SENTRAL: 'Sentral Cargo',
 };
 
 const BITESHIP_CODE_TO_ENUM: Record<string, string> = {

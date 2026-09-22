@@ -1,5 +1,4 @@
-import Link from 'next/link';
-import { ArrowLeft } from 'lucide-react';
+import { BackButton } from '@/components/back-button';
 import { prisma } from '@/lib/prisma';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { PoBatchForm } from '../po-batch-form';
@@ -14,12 +13,9 @@ export default async function NewPoBatchPage() {
 
   return (
     <div className="p-4 sm:p-6">
-      <Link
-        href="/admin/po-batches"
-        className="mb-4 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-      >
-        <ArrowLeft className="h-4 w-4" /> Back to PO batches
-      </Link>
+      <div className="mb-4">
+        <BackButton label="Back to PO batches" />
+      </div>
 
       <Card className="max-w-xl">
         <CardHeader>

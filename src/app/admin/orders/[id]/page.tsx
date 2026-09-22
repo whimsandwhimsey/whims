@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft, Pencil } from 'lucide-react';
+import { Pencil } from 'lucide-react';
+import { BackButton } from '@/components/back-button';
 import { prisma } from '@/lib/prisma';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -16,6 +17,21 @@ import { CreateInvoiceForm } from './create-invoice-form';
 import { OosItemActions } from './oos-item-actions';
 import { DuplicateOrderButton } from './duplicate-order-button';
 import { bookFormatLabels } from '@/lib/validations';
+import { ShippingForm } from '../../packing/shipping-form';
+
+const COURIER_LABELS: Record<string, string> = {
+  LION: 'Lion Parcel',
+  OJEK: 'Ojek (Gojek/Grab)',
+  SHOPEE: 'Shopee Express',
+  JNE: 'JNE',
+  JNT: 'J&T Express',
+  SICEPAT: 'SiCepat',
+  ANTERAJA: 'AnterAja',
+  WAHANA: 'Wahana',
+  NINJA: 'Ninja Xpress',
+  IDEXPRESS: 'ID Express',
+  SENTRAL: 'Sentral Cargo',
+};
 
 const INVOICE_TYPE_LABELS: Record<string, string> = {
   DEPOSIT: 'Deposit',
@@ -78,12 +94,7 @@ export default async function OrderDetailPage({
       )}
 
       <div className="mb-4 flex items-center justify-between">
-        <Link
-          href="/admin/orders"
-          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft className="h-4 w-4" /> Back to orders
-        </Link>
+        <BackButton label="Back to orders" />
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" size="sm" asChild>
             <Link href={`/admin/orders/${order.id}/edit`}>
@@ -95,6 +106,7 @@ export default async function OrderDetailPage({
             action={deleteOrder.bind(null, order.id)}
             confirmMessage={`Delete order ${order.orderNumber}? If it has payments/invoices on record, it'll be cancelled instead (kept for your records) — otherwise it's removed permanently.`}
             label="Delete"
+            redirectTo="/admin/orders"
           />
         </div>
       </div>
@@ -401,7 +413,7 @@ export default async function OrderDetailPage({
                 <PaymentStatusBadge status={order.shipment.paymentStatus} />
               </CardHeader>
               <CardContent className="space-y-1.5 text-sm">
-                <Row label="Courier" value={order.shipment.courier} />
+                <Row label="Courier" value={COURIER_LABELS[order.shipment.courier] ?? order.shipment.courier} />
                 <Row label="Tracking #" value={order.shipment.trackingNumber ?? 'Belum ada resi'} />
                 <Row label="Ongkir" value={formatCurrency(order.shipment.shippingCost.toString())} />
                 <Row label="Ongkir outstanding" value={formatCurrency(order.shipment.outstandingBalance.toString())} />
@@ -421,6 +433,29 @@ export default async function OrderDetailPage({
                 >
                   Lihat detail shipment &amp; bayar ongkir →
                 </Link>
+              </CardContent>
+            </Card>
+          )}
+
+          {(order.status === 'SHIPPED' || order.status === 'COMPLETED') && (
+            <Card>
+              <CardHeader>
+                <CardTitle>{order.shipment ? 'Update pengiriman' : 'Input pengiriman'}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="mb-3 text-xs text-muted-foreground">
+                  Input manual aja — resi, kurir, ongkir. Penagihan ongkirnya manual belakangan, ini
+                  cuma buat catatan. Kalau order ini nanti digabung packing sama order lain punya
+                  customer yang sama, tetap connect ke shipment yang sama.
+                </p>
+                <ShippingForm
+                  orderIds={[order.id]}
+                  initialCourier={order.shipment?.courier ?? order.courier}
+                  initialTracking={order.shipment?.trackingNumber ?? order.trackingNumber}
+                  initialShippingCost={
+                    order.shipment ? Number(order.shipment.shippingCost.toString()) : undefined
+                  }
+                />
               </CardContent>
             </Card>
           )}
